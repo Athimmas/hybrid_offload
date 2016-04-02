@@ -1035,12 +1035,17 @@
 !
 !-----------------------------------------------------------------------
 
-   USTAR = c0
-   where (KMT(:,:,bid) == 1)
-      HMXL(:,:,bid) = zt(1)
-   elsewhere
-      HMXL(:,:,bid) = c0
-   endwhere
+   do j=1,ny_block
+   do i=1,nx_block
+      USTAR(i,j) = c0
+      if (KMT(i,j,bid) == 1) then
+           HMXL(i,j,bid) = zt(1)
+      else
+           HMXL(i,j,bid) = c0
+      endif
+   enddo
+   enddo
+
 
    if (partial_bottom_cells) then
       do k=2,km
@@ -1096,6 +1101,14 @@
          endwhere
       enddo
    endif
+
+   if(my_task == master_task)then
+      open(unit=10,file="/home/aketh/ocn_correctness_data/changed2.txt",status="unknown",position="append",action="write",form="formatted")
+       write(10,*),HMXL(45,45,bid)
+       close(10)
+
+   endif
+
 
 !-----------------------------------------------------------------------
 !EOC
