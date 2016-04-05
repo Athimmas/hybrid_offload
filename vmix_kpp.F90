@@ -840,6 +840,8 @@
 
    real (r8) ::  &
       factor
+  
+   real (r8) start_time,end_time
 
 !-----------------------------------------------------------------------
 !
@@ -1009,24 +1011,72 @@
 !
 !-----------------------------------------------------------------------
 
-   do n=1,nt
-      mt2=min(n,2)
-      KPP_SRC(:,:,1,n,bid) = STF(:,:,n)/dz(1)           &
-                             *(-VDC(:,:,1,mt2)*GHAT(:,:,1))
-      if (partial_bottom_cells) then
+   start_time = omp_get_wtime()
+
+   if (partial_bottom_cells) then
+
+       do n=1,nt
+         mt2=min(n,2)
+         !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(j,i)NUM_THREADS(8)  
+         do j=1,ny_block
+          do i=1,nx_block
+
+              KPP_SRC(i,j,1,n,bid) = STF(i,j,n)/dz(1)           &
+                                   *(-VDC(i,j,1,mt2)*GHAT(i,j,1))
+          enddo
+         enddo  
+
+         !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(j,i,k)NUM_THREADS(8) 
          do k=2,km
-            KPP_SRC(:,:,k,n,bid) = STF(:,:,n)/DZT(:,:,k,bid)         &
-                                 *( VDC(:,:,k-1,mt2)*GHAT(:,:,k-1)   &
-                                   -VDC(:,:,k  ,mt2)*GHAT(:,:,k  ))
-         enddo
+            do j=1,ny_block
+               do i=1,nx_block
+
+                     KPP_SRC(i,j,k,n,bid) = STF(i,j,n)/DZT(i,j,k,bid)         &
+                                          *( VDC(i,j,k-1,mt2)*GHAT(i,j,k-1)   &
+                                          -VDC(i,j,k  ,mt2)*GHAT(i,j,k  ))
+
+                enddo
+            enddo    
+         enddo  !end k loop
+
+        enddo !end n loop  
+
       else
-         do k=2,km
-            KPP_SRC(:,:,k,n,bid) = STF(:,:,n)/dz(k)                  &
-                                 *( VDC(:,:,k-1,mt2)*GHAT(:,:,k-1)   &
-                                   -VDC(:,:,k  ,mt2)*GHAT(:,:,k  ))
+
+       do n=1,nt
+         mt2=min(n,2) 
+         !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(j,i)NUM_THREADS(8)  
+         do j=1,ny_block
+          do i=1,nx_block
+
+              KPP_SRC(i,j,1,n,bid) = STF(i,j,n)/dz(1)           &
+                                   *(-VDC(i,j,1,mt2)*GHAT(i,j,1))
+          enddo
          enddo
-      endif
-   enddo
+
+         !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(j,i,k)NUM_THREADS(8)
+         do k=2,km
+          do j=1,ny_block
+            do i=1,nx_block
+
+            KPP_SRC(i,j,k,n,bid) = STF(i,j,n)/dz(k)                  &
+                                 *( VDC(i,j,k-1,mt2)*GHAT(i,j,k-1)   &
+                                   -VDC(i,j,k  ,mt2)*GHAT(i,j,k  ))
+            enddo
+           enddo 
+         enddo !end k loop
+
+       enddo !end n loop 
+
+   endif
+
+
+   end_time = omp_get_wtime()
+
+
+   if(my_task == master_task)then
+   print *,"Time at where statments is ",end_time - start_time
+   endif
 
 !-----------------------------------------------------------------------
 !
@@ -1035,6 +1085,8 @@
 !
 !-----------------------------------------------------------------------
 
+
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
    do j=1,ny_block
    do i=1,nx_block
       USTAR(i,j) = c0
@@ -1044,70 +1096,96 @@
            HMXL(i,j,bid) = c0
       endif
    enddo
-   enddo
+   enddo 
 
 
    if (partial_bottom_cells) then
       do k=2,km
-         where (k <= KMT(:,:,bid))
-            STABLE = zt(k-1) + p5*(DZT(:,:,k-1,bid) + DZT(:,:,k,bid))
-            USTAR = max(DBSFC(:,:,k)/STABLE,USTAR)
-            HMXL(:,:,bid) = STABLE
-         endwhere
+       !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
+       do j=1,ny_block
+        do i=1,nx_block
+         if (k <= KMT(i,j,bid)) then
+            STABLE(i,j) = zt(k-1) + p5*(DZT(i,j,k-1,bid) + DZT(i,j,k,bid))
+            USTAR(i,j) = max(DBSFC(i,j,k)/STABLE(i,j),USTAR(i,j))
+            HMXL(i,j,bid) = STABLE(i,j)
+         endif
+        enddo
+       enddo 
       enddo
 
       VISC(:,:,1) = c0
       do k=2,km
-         where (USTAR > c0 )
-            VISC(:,:,k) = (DBSFC(:,:,k)-DBSFC(:,:,k-1))/ &
-                          (p5*(DZT(:,:,k,bid) + DZT(:,:,k-1,bid)))
-         end where
-         where ( VISC(:,:,k) >= USTAR .and.              &
-                (VISC(:,:,k)-VISC(:,:,k-1)) /= c0 .and.  &
-                 USTAR > c0 )   ! avoid divide by zero
-            BFSFC = (VISC(:,:,k) - USTAR)/ &
-                    (VISC(:,:,k)-VISC(:,:,k-1))
+       !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
+       do j=1,ny_block
+        do i=1,nx_block
+
+         if (USTAR(i,j) > c0 ) then
+            VISC(i,j,k) = (DBSFC(i,j,k)-DBSFC(i,j,k-1))/ &
+                          (p5*(DZT(i,j,k,bid) + DZT(i,j,k-1,bid)))
+         endif
+
+         if ( VISC(i,j,k) >= USTAR(i,j) .and.              &
+                (VISC(i,j,k)-VISC(i,j,k-1)) /= c0 .and.  &
+                 USTAR(i,j) > c0 ) then   ! avoid divide by zero
+            BFSFC(i,j) = (VISC(i,j,k) - USTAR(i,j))/ &
+                    (VISC(i,j,k)-VISC(i,j,k-1))
 ! tqian
 !            HMXL(:,:,bid) =   (zt(k-1) + p5*DZT(:,:,k-1,bid))*(c1-BFSFC) &
 !                            + (zt(k-1) - p5*DZT(:,:,k-1,bid))*BFSFC
-             HMXL(:,:,bid) =   (zt(k-1) + p25*(DZT(:,:,k-1,bid)+DZT(:,:,k,bid)))*(c1-BFSFC) &
-                             + (zt(k-1) - p25*(DZT(:,:,k-2,bid)+DZT(:,:,k-1,bid)))*BFSFC
+             HMXL(i,j,bid) =   (zt(k-1) + p25*(DZT(i,j,k-1,bid)+DZT(i,j,k,bid)))*(c1-BFSFC(i,j)) &
+                             + (zt(k-1) - p25*(DZT(i,j,k-2,bid)+DZT(i,j,k-1,bid)))*BFSFC(i,j)
 
-            USTAR(:,:) = c0
-         endwhere
+            USTAR(i,j) = c0
+         endif
       enddo
+     enddo
+    enddo
+ 
    else
+
+   VISC(:,:,1) = c0
+
       do k=2,km
-         where (k <= KMT(:,:,bid))
-            USTAR = max(DBSFC(:,:,k)/zt(k),USTAR)
-            HMXL(:,:,bid) = zt(k)
-         endwhere
+       !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)   
+       do j=1,ny_block
+        do i=1,nx_block
+           if (k <= KMT(i,j,bid)) then
+            USTAR(i,j) = max(DBSFC(i,j,k)/zt(k),USTAR(i,j))
+            HMXL(i,j,bid) = zt(k)
+           endif
+        enddo 
+       enddo
       enddo
 
-      VISC(:,:,1) = c0
       do k=2,km
-         where (USTAR > c0 )
-            VISC(:,:,k) = (DBSFC(:,:,k)-DBSFC(:,:,k-1))/ &
+       !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
+       do j=1,ny_block
+        do i=1,nx_block 
+         if (USTAR(i,j) > c0 ) then
+            VISC(i,j,k) = (DBSFC(i,j,k)-DBSFC(i,j,k-1))/ &
                           (zt(k) - zt(k-1))
-         end where
-         where ( VISC(:,:,k) >= USTAR .and.              &
-                (VISC(:,:,k)-VISC(:,:,k-1)) /= c0 .and.  &
-                 USTAR > c0 )   ! avoid divide by zero
-            BFSFC = (VISC(:,:,k) - USTAR)/ &
-                    (VISC(:,:,k)-VISC(:,:,k-1))
-            HMXL(:,:,bid) = -p5*(zgrid(k  ) + zgrid(k-1))*(c1-BFSFC) &
-                            -p5*(zgrid(k-1) + zgrid(k-2))*BFSFC
-            USTAR(:,:) = c0
-         endwhere
+         endif
+ 
+
+             if( VISC(i,j,k) >= USTAR(i,j) .and.              &
+                (VISC(i,j,k)-VISC(i,j,k-1)) /= c0 .and.  &
+                 USTAR(i,j) > c0 ) then   ! avoid divide by zero
+
+                 BFSFC(i,j) = (VISC(i,j,k) - USTAR(i,j))/ &
+                       (VISC(i,j,k)-VISC(i,j,k-1))
+                 HMXL(i,j,bid) = -p5*(zgrid(k  ) + zgrid(k-1))*(c1-BFSFC(i,j)) &
+                                 -p5*(zgrid(k-1) + zgrid(k-2))*BFSFC(i,j)
+                 USTAR(i,j) = c0
+
+             endif
+
+          enddo
+         enddo 
+         
       enddo
    endif
 
-   if(my_task == master_task)then
-      open(unit=10,file="/home/aketh/ocn_correctness_data/changed2.txt",status="unknown",position="append",action="write",form="formatted")
-       write(10,*),HMXL(45,45,bid)
-       close(10)
-
-   endif
+   end_time = omp_get_wtime()
 
 
 !-----------------------------------------------------------------------
