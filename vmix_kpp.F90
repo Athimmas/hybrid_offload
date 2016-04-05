@@ -863,7 +863,13 @@
 !
 !-----------------------------------------------------------------------
 
+   start_time = omp_get_wtime()
+
    call buoydiff(DBLOC, DBSFC, TRCR, this_block)
+
+   end_time = omp_get_wtime()
+
+   !print *,"Time at buoydiff is ",end_time - start_time
 
    if (lniw_mixing) then
 !-----------------------------------------------------------------------
@@ -871,6 +877,8 @@
 !     when lniw_mixing, compute boundary layer depth now
 !
 !-----------------------------------------------------------------------
+
+     start_time = omp_get_wtime()
 
      if (present(SMFT)) then
         call bldepth (DBLOC, DBSFC, TRCR, UUU, VVV, UCUR, VCUR, STF, SHF_QSW,   &
@@ -882,9 +890,19 @@
                       this_block, SMF=SMF)
      endif
 
+   end_time = omp_get_wtime()
+
+   !print *,"Time at bldepth is ",end_time - start_time 
+
+   start_time = omp_get_wtime()
+
 
      call compute_niw_energy_flux(VISC,VDC,UUU,VVV,KE_mix,UCUR,VCUR,KE_cur,  &
                                   DBLOC, KPP_HBLT(:,:,bid),KBL,En,this_block)
+
+   end_time = omp_get_wtime()
+
+   !print *,"Time at energy_flux is ",end_time - start_time 
 
    endif ! if (lniw_mixing) then
 
@@ -894,9 +912,16 @@
 !  convection
 !
 !-----------------------------------------------------------------------
+ 
+   start_time = omp_get_wtime()
 
    call ri_iwmix(DBLOC, VISC, VDC, UUU, VVV, RHOMIX,&
                  convect_diff, convect_visc, this_block)
+
+   end_time = omp_get_wtime()
+
+   !print *,"Time at ri_mix is ",end_time - start_time
+   
 
 !-----------------------------------------------------------------------
 !
@@ -904,13 +929,22 @@
 !
 !-----------------------------------------------------------------------
 
+   start_time = omp_get_wtime()
+
    if (ldbl_diff) call ddmix(VDC, TRCR, this_block)
+
+   end_time = omp_get_wtime()
+
+   !print *,"Time at ddmix is ",end_time - start_time
+
 
 !-----------------------------------------------------------------------
 !
 !     compute boundary layer depth (when no niw mixing)
 !
 !-----------------------------------------------------------------------
+
+   start_time = omp_get_wtime()
 
    if (.not. lniw_mixing) then
      if (present(SMFT)) then
@@ -924,14 +958,25 @@
      endif
    endif ! .not. lniw_mixing
 
+   end_time = omp_get_wtime()
+
+   !print *,"Time at bldepth is ",end_time - start_time
+
+
 !-----------------------------------------------------------------------
 !
 !  compute boundary layer diffusivities and match to interior values
 !
 !-----------------------------------------------------------------------
+  
+   start_time = omp_get_wtime() 
 
    call blmix(VISC, VDC, KPP_HBLT(:,:,bid), USTAR, BFSFC, STABLE, &
               KBL, GHAT, this_block) 
+
+   end_time = omp_get_wtime()
+
+   !print *,"Time at Blmix is ",end_time - start_time
 
 !-----------------------------------------------------------------------
 !
@@ -954,41 +999,53 @@
 !
 !-----------------------------------------------------------------------
 
+   start_time = omp_get_wtime()
+  
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k,j,i,WORK1,WORK2,FCON)NUM_THREADS(8) 
    do k=1,km-1           
 
-      if (partial_bottom_cells) then
-         WORK1 = DBLOC(:,:,k)/(p5*(DZT(:,:,k  ,bid) + &
-                                   DZT(:,:,k+1,bid)))
-      else
-         WORK1 = DBLOC(:,:,k)/(zgrid(k) - zgrid(k+1))
-      end if
+       do j=1,ny_block
+        do i=1,nx_block  
 
-      if (BVSQcon /= c0) then
-         WORK2 = min(c1-(max(WORK1,BVSQcon))/BVSQcon, c1)
-         FCON  = (c1 - WORK2*WORK2)**3
-      else
-         where (WORK1 > c0)
-            FCON = c0
-         elsewhere
-            FCON = c1
-         end where
-      endif
+         if (partial_bottom_cells) then 
 
+            WORK1(i,j) = DBLOC(i,j,k)/(p5*(DZT(i,j,k  ,bid) + &
+                                             DZT(i,j,k+1,bid)))
+
+         else
+
+            WORK1(i,j) = DBLOC(i,j,k)/(zgrid(k) - zgrid(k+1))
+
+         endif
+
+         if (BVSQcon /= c0) then
+
+            WORK2(i,j) = min(c1-(max(WORK1(i,j),BVSQcon))/BVSQcon, c1)
+            FCON(i,j)  = (c1 - WORK2(i,j)*WORK2(i,j))**3
+ 
+         else
+         
+         if (WORK1(i,j) > c0) then
+            FCON(i,j) = c0
+         else
+            FCON(i,j) = c1
+         endif
+
+         endif
+ 
       !*** add convection and reset sea floor values to zero
       
-
-      do j=1,ny_block
-      do i=1,nx_block
          if ( k >= KBL(i,j) ) then
             VISC(i,j,k)  = VISC(i,j,k)  + convect_visc * FCON(i,j)
             VDC(i,j,k,1) = VDC(i,j,k,1) + convect_diff * FCON(i,j)
             VDC(i,j,k,2) = VDC(i,j,k,2) + convect_diff * FCON(i,j)
          endif
          if (k >= KMT(i,j,bid)) then
-         	  VISC(i,j,k  ) = c0
+                  VISC(i,j,k  ) = c0
             VDC (i,j,k,1) = c0
             VDC (i,j,k,2) = c0
          endif
+
       end do
       end do
 
@@ -1001,6 +1058,10 @@
 
    enddo
 
+  end_time = omp_get_wtime()
+
+  print *,"Time at remaining part is ",end_time - start_time  
+
    VDC(:,:,km,:) = c0
    VVC(:,:,km)   = c0
 
@@ -1011,7 +1072,7 @@
 !
 !-----------------------------------------------------------------------
 
-   start_time = omp_get_wtime()
+   !start_time = omp_get_wtime()
 
    if (partial_bottom_cells) then
 
@@ -1071,12 +1132,12 @@
    endif
 
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
 
-   if(my_task == master_task)then
-   print *,"Time at where statments is ",end_time - start_time
-   endif
+   !if(my_task == master_task)then
+   !print *,"Time at where statments is ",end_time - start_time
+   !endif
 
 !-----------------------------------------------------------------------
 !
