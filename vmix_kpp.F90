@@ -863,11 +863,11 @@
 !
 !-----------------------------------------------------------------------
 
-   start_time = omp_get_wtime()
+   !start_time = omp_get_wtime()
 
    call buoydiff(DBLOC, DBSFC, TRCR, this_block)
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
    !print *,"Time at buoydiff is ",end_time - start_time
 
@@ -878,7 +878,7 @@
 !
 !-----------------------------------------------------------------------
 
-     start_time = omp_get_wtime()
+    !start_time = omp_get_wtime()
 
      if (present(SMFT)) then
         call bldepth (DBLOC, DBSFC, TRCR, UUU, VVV, UCUR, VCUR, STF, SHF_QSW,   &
@@ -890,17 +890,17 @@
                       this_block, SMF=SMF)
      endif
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
    !print *,"Time at bldepth is ",end_time - start_time 
 
-   start_time = omp_get_wtime()
+   !start_time = omp_get_wtime()
 
 
      call compute_niw_energy_flux(VISC,VDC,UUU,VVV,KE_mix,UCUR,VCUR,KE_cur,  &
                                   DBLOC, KPP_HBLT(:,:,bid),KBL,En,this_block)
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
    !print *,"Time at energy_flux is ",end_time - start_time 
 
@@ -913,12 +913,12 @@
 !
 !-----------------------------------------------------------------------
  
-   start_time = omp_get_wtime()
+   !start_time = omp_get_wtime()
 
    call ri_iwmix(DBLOC, VISC, VDC, UUU, VVV, RHOMIX,&
                  convect_diff, convect_visc, this_block)
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
    !print *,"Time at ri_mix is ",end_time - start_time
    
@@ -935,7 +935,7 @@
 
    end_time = omp_get_wtime()
 
-   !print *,"Time at ddmix is ",end_time - start_time
+   print *,"Time at ddmix is ",end_time - start_time
 
 
 !-----------------------------------------------------------------------
@@ -944,7 +944,7 @@
 !
 !-----------------------------------------------------------------------
 
-   start_time = omp_get_wtime()
+   !start_time = omp_get_wtime()
 
    if (.not. lniw_mixing) then
      if (present(SMFT)) then
@@ -958,7 +958,7 @@
      endif
    endif ! .not. lniw_mixing
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
    !print *,"Time at bldepth is ",end_time - start_time
 
@@ -969,12 +969,12 @@
 !
 !-----------------------------------------------------------------------
   
-   start_time = omp_get_wtime() 
+   !start_time = omp_get_wtime() 
 
    call blmix(VISC, VDC, KPP_HBLT(:,:,bid), USTAR, BFSFC, STABLE, &
               KBL, GHAT, this_block) 
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
    !print *,"Time at Blmix is ",end_time - start_time
 
@@ -999,9 +999,7 @@
 !
 !-----------------------------------------------------------------------
 
-   start_time = omp_get_wtime()
-  
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k,j,i,WORK1,WORK2,FCON)NUM_THREADS(8) 
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k,j,i,WORK1,WORK2,FCON)NUM_THREADS(8)
    do k=1,km-1           
 
        do j=1,ny_block
@@ -1057,10 +1055,6 @@
 
 
    enddo
-
-  end_time = omp_get_wtime()
-
-  print *,"Time at remaining part is ",end_time - start_time  
 
    VDC(:,:,km,:) = c0
    VVC(:,:,km)   = c0
@@ -2117,7 +2111,6 @@
 !     in WM.
 !
 !-----------------------------------------------------------------------
-
       if (partial_bottom_cells) then
          if (kl < km) then
             B_FRQNCY = sqrt( &
@@ -2607,6 +2600,7 @@
 !
 !-----------------------------------------------------------------------
 
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k,SIGMA,F1,WM,WS)NUM_THREADS(8)
    do k = 1,km       
 
       if (partial_bottom_cells) then
@@ -2913,7 +2907,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) ::  k,kup,knxt
+   integer (int_kind) ::  k,kup,knxt,i,j
 
    real (r8), dimension(nx_block,ny_block) :: &
       ALPHADT,           &! alpha*DT  across interfaces
@@ -2936,15 +2930,19 @@
    kup  = 1
    knxt = 2
 
-   PRANDTL = merge(-c2,TRCR(:,:,1,1),TRCR(:,:,1,1) < -c2)
 
-   call state(1, 1, PRANDTL, TRCR(:,:,1,2), this_block, &
-                    RHOFULL=RRHO, &
-                    DRHODT=TALPHA(:,:,kup), DRHODS=SBETA(:,:,kup))
-
+   !$OMP PARALLEL DO &
+   !$OMP DEFAULT(SHARED)PRIVATE(K,PRANDTL,RRHO,ALPHADT,BETADS,TALPHA,SBETA,DIFFDD)NUM_THREADS(8)
    do k=1,km
 
       if ( k < km ) then
+
+         PRANDTL = merge(-c2,TRCR(:,:,k,1),TRCR(:,:,k,1) < -c2)
+
+         call state(k, k, PRANDTL, TRCR(:,:,k,2), this_block, &
+                    RHOFULL=RRHO, &
+                    DRHODT=TALPHA(:,:,kup), DRHODS=SBETA(:,:,kup))
+
 
          PRANDTL = merge(-c2,TRCR(:,:,k+1,1),TRCR(:,:,k+1,1) < -c2)
 
@@ -2959,9 +2957,6 @@
          BETADS  = p5*( SBETA(:,:,kup) +  SBETA(:,:,knxt)) &
                      *(TRCR(:,:,k,2) - TRCR(:,:,k+1,2))
 
-         kup  = knxt
-         knxt = 3 - kup
-
       else
 
          ALPHADT = c0
@@ -2975,36 +2970,48 @@
 !
 !-----------------------------------------------------------------------
 
-      where ( ALPHADT > BETADS .and. BETADS > c0 )
+      do j=1,nx_block
+       do i=1,ny_block
 
-         RRHO       = MIN(ALPHADT/BETADS, Rrho0)
-         DIFFDD     = dsfmax*(c1-(RRHO-c1)/(Rrho0-c1))**3
-         VDC(:,:,k,1) = VDC(:,:,k,1) + 0.7_r8*DIFFDD
-         VDC(:,:,k,2) = VDC(:,:,k,2) + DIFFDD
+           if ( ALPHADT(i,j) > BETADS(i,j) .and. BETADS(i,j) > c0 ) then
 
-      endwhere
+            RRHO(i,j)       = MIN(ALPHADT(i,j)/BETADS(i,j), Rrho0)
+            DIFFDD(i,j)     = dsfmax*(c1-(RRHO(i,j)-c1)/(Rrho0-c1))**3
+            VDC(i,j,k,1) = VDC(i,j,k,1) + 0.7_r8*DIFFDD(i,j)
+            VDC(i,j,k,2) = VDC(i,j,k,2) + DIFFDD(i,j)
 
+            endif
+
+       enddo
+      enddo  
 !-----------------------------------------------------------------------
 !
 !     diffusive convection
 !
 !-----------------------------------------------------------------------
+ 
+      do j=1,nx_block
+       do i=1,ny_block
 
-      where ( ALPHADT < c0 .and. BETADS < c0 .and. ALPHADT > BETADS )
-         RRHO    = ALPHADT / BETADS
-         DIFFDD  = 1.5e-2_r8*0.909_r8* &
-                   exp(4.6_r8*exp(-0.54_r8*(c1/RRHO-c1)))
-         PRANDTL = 0.15_r8*RRHO
-      elsewhere
-         RRHO    = c0
-         DIFFDD  = c0
-         PRANDTL = c0
-      endwhere
+          if ( ALPHADT(i,j) < c0 .and. BETADS(i,j) < c0 .and. ALPHADT(i,j) > BETADS(i,j) ) then
+           RRHO(i,j)    = ALPHADT(i,j) / BETADS(i,j)
+           DIFFDD(i,j)  = 1.5e-2_r8*0.909_r8* &
+                          exp(4.6_r8*exp(-0.54_r8*(c1/RRHO(i,j)-c1)))
+           PRANDTL(i,j) = 0.15_r8*RRHO(i,j)
+          else
+           RRHO(i,j)    = c0
+           DIFFDD(i,j)  = c0
+           PRANDTL(i,j) = c0
+          endif
 
-      where (RRHO > p5) PRANDTL = (1.85_r8 - 0.85_r8/RRHO)*RRHO
+          if (RRHO(i,j) > p5) PRANDTL(i,j) = (1.85_r8 - 0.85_r8/RRHO(i,j))*RRHO(i,j)
 
-      VDC(:,:,k,1) = VDC(:,:,k,1) + DIFFDD
-      VDC(:,:,k,2) = VDC(:,:,k,2) + PRANDTL*DIFFDD
+          VDC(i,j,k,1) = VDC(i,j,k,1) + DIFFDD(i,j)
+          VDC(i,j,k,2) = VDC(i,j,k,2) + PRANDTL(i,j)*DIFFDD(i,j)
+
+        enddo
+       enddo 
+     
 
    end do
 
@@ -3087,9 +3094,12 @@
 !
 !-----------------------------------------------------------------------
 
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(TEMPK,RHO1,RHOKM,RHOK)NUM_THREADS(8)
    do k = 2,km
 
       TEMPK(:,:,klvl) = merge(-c2,TRCR(:,:,k,1),TRCR(:,:,k,1) < -c2)
+
+      TEMPK(:,:,kprev) = merge(-c2,TRCR(:,:,k-1,1),TRCR(:,:,k-1,1) < -c2) 
 
       call state(k, k, TEMPSFC,          TRCR(:,:,1  ,2), &
                        this_block, RHOFULL=RHO1)
@@ -3111,10 +3121,6 @@
          if (k-1 >= KMT(i,j,bid)) DBLOC(i,j,k-1) = c0
       end do
       end do
-
-      ktmp  = klvl
-      klvl  = kprev
-      kprev = ktmp
 
    enddo
 
