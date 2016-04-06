@@ -929,13 +929,13 @@
 !
 !-----------------------------------------------------------------------
 
-   start_time = omp_get_wtime()
+   !start_time = omp_get_wtime()
 
    if (ldbl_diff) call ddmix(VDC, TRCR, this_block)
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
-   print *,"Time at ddmix is ",end_time - start_time
+   !print *,"Time at ddmix is ",end_time - start_time
 
 
 !-----------------------------------------------------------------------
@@ -969,14 +969,14 @@
 !
 !-----------------------------------------------------------------------
   
-   !start_time = omp_get_wtime() 
+   start_time = omp_get_wtime() 
 
    call blmix(VISC, VDC, KPP_HBLT(:,:,bid), USTAR, BFSFC, STABLE, &
               KBL, GHAT, this_block) 
 
-   !end_time = omp_get_wtime()
+   end_time = omp_get_wtime()
 
-   !print *,"Time at Blmix is ",end_time - start_time
+   print *,"Time at Blmix is ",end_time - start_time
 
 !-----------------------------------------------------------------------
 !
@@ -2600,7 +2600,7 @@
 !
 !-----------------------------------------------------------------------
 
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k,SIGMA,F1,WM,WS)NUM_THREADS(8)
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(K,I,J,SIGMA,F1,WM,WS)NUM_THREADS(8)SCHEDULE(DYNAMIC,1)
    do k = 1,km       
 
       if (partial_bottom_cells) then
@@ -3094,7 +3094,7 @@
 !
 !-----------------------------------------------------------------------
 
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(TEMPK,RHO1,RHOKM,RHOK)NUM_THREADS(8)
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(TEMPK,RHO1,RHOKM,RHOK,I,J)NUM_THREADS(8)
    do k = 2,km
 
       TEMPK(:,:,klvl) = merge(-c2,TRCR(:,:,k,1),TRCR(:,:,k,1) < -c2)
@@ -3369,7 +3369,6 @@
 
      HBLT = WORK2
 
-     start_time = omp_get_wtime()
 
      do k=1,km
        do j=2,ny_block-1
