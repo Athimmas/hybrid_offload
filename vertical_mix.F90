@@ -1630,7 +1630,7 @@
 !-----------------------------------------------------------------------
  
 !CDIR COLLAPSE
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(16)
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
    do j=jb,je
    do i=ib,ie
 
@@ -1732,7 +1732,7 @@
    end do
 
 !CDIR COLLAPSE
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J,K)NUM_THREADS(8)
    do k=1,km
    do j=jb,je
    do i=ib,ie
