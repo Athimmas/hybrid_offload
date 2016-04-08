@@ -1827,9 +1827,11 @@
 
                 do kk=1,km
                 call hdifft(kk, WORKN_HOST(:,:,:,kk), TMIX, UMIX, VMIX, this_block)
+                enddo
+
                 VDC_GM_HOST = VDC_GM
                 VDC_HOST = VDC
-                enddo
+
 
         endif
    endif 
