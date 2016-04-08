@@ -946,15 +946,14 @@
 !
 !-----------------------------------------------------------------------
 
-   !if (lpressure_avg .and. leapfrogts) then
-   !!$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k)NUM_THREADS(8)
-     !do k=1,km     
-         !if (lpressure_avg .and. leapfrogts) then
-         !   call state(k,k,TRACER(:,:,k,1,newtime,iblock), &
-         !                  TRACER(:,:,k,2,newtime,iblock), &
-         !                  this_block, RHOOUT=RHO(:,:,k,newtime,iblock))
-     !enddo 
-   !endif
+   if (lpressure_avg .and. leapfrogts) then
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k)NUM_THREADS(8)
+     do k=1,km     
+            call state(k,k,TRACER(:,:,k,1,newtime,iblock), &
+                           TRACER(:,:,k,2,newtime,iblock), &
+                           this_block, RHOOUT=RHO(:,:,k,newtime,iblock))
+     enddo 
+   endif
 
    !$OMP PARALLEL DO PRIVATE(iblock,this_block,k,km1,kp1,n, &
    !$OMP                     WUK,FX,FY,WORK1,WORK2)
@@ -986,11 +985,11 @@
 !
 !-----------------------------------------------------------------------
 
-         if (lpressure_avg .and. leapfrogts) then
-            call state(k,k,TRACER(:,:,k,1,newtime,iblock), &
-                           TRACER(:,:,k,2,newtime,iblock), &
-                           this_block, RHOOUT=RHO(:,:,k,newtime,iblock))
-         endif
+         !if (lpressure_avg .and. leapfrogts) then
+         !   call state(k,k,TRACER(:,:,k,1,newtime,iblock), &
+         !                  TRACER(:,:,k,2,newtime,iblock), &
+         !                  this_block, RHOOUT=RHO(:,:,k,newtime,iblock))
+         !endif
 
 !-----------------------------------------------------------------------
 !
