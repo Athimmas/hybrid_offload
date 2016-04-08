@@ -1615,7 +1615,7 @@
    F1=c0
    F2=c0
 
-   start_time = omp_get_wtime()
+   !start_time = omp_get_wtime()
 
    !*** note that this array is over-written for partial bottom cells
    do k=1,km
@@ -1742,9 +1742,9 @@
    end do
    end do
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
-   print *,"time at impvmixu is",end_time - start_time
+   !print *,"time at impvmixu is",end_time - start_time
 !-----------------------------------------------------------------------
 !
 !  UVEL,VVEL(newtime) now hold a modified rhs that has already been

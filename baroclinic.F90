@@ -946,14 +946,6 @@
 !
 !-----------------------------------------------------------------------
 
-   if (lpressure_avg .and. leapfrogts) then
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k)NUM_THREADS(8)
-     do k=1,km     
-            call state(k,k,TRACER(:,:,k,1,newtime,iblock), &
-                           TRACER(:,:,k,2,newtime,iblock), &
-                           this_block, RHOOUT=RHO(:,:,k,newtime,iblock))
-     enddo 
-   endif
 
    !$OMP PARALLEL DO PRIVATE(iblock,this_block,k,km1,kp1,n, &
    !$OMP                     WUK,FX,FY,WORK1,WORK2)
@@ -985,11 +977,11 @@
 !
 !-----------------------------------------------------------------------
 
-         !if (lpressure_avg .and. leapfrogts) then
-         !   call state(k,k,TRACER(:,:,k,1,newtime,iblock), &
-         !                  TRACER(:,:,k,2,newtime,iblock), &
-         !                  this_block, RHOOUT=RHO(:,:,k,newtime,iblock))
-         !endif
+         if (lpressure_avg .and. leapfrogts) then
+            call state(k,k,TRACER(:,:,k,1,newtime,iblock), &
+                           TRACER(:,:,k,2,newtime,iblock), &
+                           this_block, RHOOUT=RHO(:,:,k,newtime,iblock))
+         endif
 
 !-----------------------------------------------------------------------
 !
@@ -1810,6 +1802,9 @@
    !dir$ in(KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,WORKN_PHI,WTOP_ISOP,WBOT_ISOP: alloc_if(.true.) free_if(.false.) )  
    itsdone = itsdone + 1
    endif
+
+
+   start_time = omp_get_wtime() 
  
    !dir$ offload begin target(mic:micno)in(kk,TMIX,UMIX,VMIX,this_block,hmix_tracer_itype,tavg_HDIFE_TRACER,tavg_HDIFN_TRACER,tavg_HDIFB_TRACER) &
    !dir$ in(lsubmesoscale_mixing,dt,dtu,HYX,HXY,RZ_SAVE,RX,RY,TX,TY,TZ,KMT,KMTE,KMTN,implicit_vertical_mix,vmix_itype,KPP_HBLT,HMXL) &
@@ -1829,10 +1824,17 @@
 
    !dir$ end offload
 
+    end_time = omp_get_wtime()
+
+    print *,"PHI hdifft time ",end_time - start_time
+
+
    endif
 
    if(nsteps_run == 1)then 
         if(k==1)then
+
+                start_time = omp_get_witme()
 
                 do kk=1,km
                 call hdifft(kk, WORKN_HOST(:,:,:,kk), TMIX, UMIX, VMIX, this_block)
@@ -1840,6 +1842,10 @@
 
                 VDC_GM_HOST = VDC_GM
                 VDC_HOST = VDC
+            
+                end_time = omp_get_wtime() 
+ 
+                print *,"Host hdifft time ",end_time - start_time 
 
 
         endif
