@@ -40,6 +40,7 @@
    use vmix_kpp
    use exit_mod
    use prognostic
+   use omp_lib
 
    implicit none
    private
@@ -1080,11 +1081,14 @@
    real (r8), dimension(nx_block,ny_block) :: &
       H1            ! factor containing full thickness of sfc layer
 
+   real (r8) start_time,end_time
+
 !-----------------------------------------------------------------------
 !
 !  check and initialize some necessary quantities
 !
 !-----------------------------------------------------------------------
+
 
    if (nfirst > nlast .or. nfirst > nt) return
 
@@ -1094,7 +1098,8 @@
    jb  = this_block%jb
    je  = this_block%je
 
-   call timer_start(timer_impvmixt,block_id=bid)
+
+   !start_time = omp_get_wtime()
 
    !*** note that this array is overwritten for partial bottom cells
    do k=1,km
@@ -1234,7 +1239,10 @@
 !-----------------------------------------------------------------------
 
    end do
-   call timer_stop(timer_impvmixt,block_id=bid)
+
+   !end_time = omp_get_wtime()
+ 
+   !print *,"impvmixt time", end_time - start_time   
 
 !-----------------------------------------------------------------------
 !EOC
@@ -1369,6 +1377,8 @@
    real (r8), dimension(nx_block,ny_block) :: &
       H1            ! factor containing full thickness of sfc layer
 
+   real (r8) start_time,end_time
+
 !-----------------------------------------------------------------------
 !
 !  check and initialize some necessary quantities
@@ -1383,7 +1393,7 @@
    jb  = this_block%jb
    je  = this_block%je
 
-   call timer_start(timer_impvmixt,block_id=bid)
+   !start_time = omp_get_wtime()
 
    !*** note that this array is overwritten for partial bottom cells
    do k=1,km
@@ -1412,6 +1422,7 @@
       !*** horizontal grid point
 
 !CDIR COLLAPSE
+      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
       do j=jb,je
       do i=ib,ie
 
@@ -1454,6 +1465,7 @@
           end do
           end do
         else ! no partial_bottom_cells
+          !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(J,I)NUM_THREADS(8)
           do j=jb,je
           do i=ib,ie
              C(i,j) = A(i,j)
@@ -1484,6 +1496,7 @@
       !*** back substitution
 
       do k=km-1,1,-1
+      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
       do j=jb,je
       do i=ib,ie
          if (k < KMT(i,j,bid)) &
@@ -1501,6 +1514,7 @@
 !-----------------------------------------------------------------------
 
 !CDIR COLLAPSE
+      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J,K)NUM_THREADS(8)
       do k=1,km
       do j=jb,je
       do i=ib,ie
@@ -1516,7 +1530,10 @@
 !-----------------------------------------------------------------------
 
    end do
-   call timer_stop(timer_impvmixt,block_id=bid)
+
+   !end_time = omp_get_wtime()
+
+   !print *,"time at correct is ",end_time - start_time
 
 !-----------------------------------------------------------------------
 !EOC
@@ -1576,6 +1593,8 @@
    real (r8), dimension(km) :: & 
       hfac_u
 
+   real (r8) start_time,end_time
+
 !-----------------------------------------------------------------------
 !
 !  initialize
@@ -1596,7 +1615,7 @@
    F1=c0
    F2=c0
 
-   call timer_start(timer_impvmixu,block_id=bid)
+   start_time = omp_get_wtime()
 
    !*** note that this array is over-written for partial bottom cells
    do k=1,km
@@ -1611,6 +1630,7 @@
 !-----------------------------------------------------------------------
  
 !CDIR COLLAPSE
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(16)
    do j=jb,je
    do i=ib,ie
 
@@ -1663,6 +1683,7 @@
         end do
         end do
       else ! no partial_bottom_cell
+        !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
         do j=jb,je
         do i=ib,ie
            C(i,j) = A(i,j)
@@ -1699,6 +1720,7 @@
    end do ! k
 
    do k=km-1,1,-1
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
    do j=jb,je
    do i=ib,ie
       if (k < KMU(i,j,bid)) then
@@ -1710,6 +1732,7 @@
    end do
 
 !CDIR COLLAPSE
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
    do k=1,km
    do j=jb,je
    do i=ib,ie
@@ -1719,13 +1742,15 @@
    end do
    end do
 
+   end_time = omp_get_wtime()
+
+   print *,"time at impvmixu is",end_time - start_time
 !-----------------------------------------------------------------------
 !
 !  UVEL,VVEL(newtime) now hold a modified rhs that has already been
 !  multiplied by dtu to advance UVEL.
 !
 !-----------------------------------------------------------------------
-   call timer_stop(timer_impvmixu,block_id=bid)
 
 !-----------------------------------------------------------------------
 !EOC

@@ -51,6 +51,7 @@
    use registry
    use overflows
    use overflow_type
+   use omp_lib
 
    implicit none
    private
@@ -1622,8 +1623,9 @@
 !  for state
 !
 !-----------------------------------------------------------------------
-
+ 
      if(k == 1) then
+
        !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(kk)NUM_THREADS(8)
        do kk=1,km
           call state(kk,1,TRCR(:,:,kk,1),TRCR(:,:,kk,2),this_block,RHOFULL=RHOK1_BUF(:,:,kk))
@@ -1650,7 +1652,9 @@
           endif
 
        enddo
+
       endif
+
 
       RHOK1 = RHOK1_BUF(:,:,k)
       RHOK1M = RHOK1M_BUF(:,:,k)

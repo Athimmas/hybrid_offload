@@ -545,6 +545,8 @@
    type (block) ::        &
       this_block           ! block information for current block
 
+   real (r8) start_time, end_time
+
 !-----------------------------------------------------------------------
 !
 !  compute flux velocities in ghost cells
@@ -616,7 +618,8 @@
 
         endif
 
-
+         !start_time = omp_get_wtime()
+   
          if (lsmft_avail) then
             call vmix_coeffs(k,TRACER (:,:,:,:,mixtime,iblock), &
                                UVEL   (:,:,:  ,mixtime,iblock), &
@@ -638,6 +641,10 @@
                                SHF_QSW(:,:            ,iblock), &
                                this_block, SMF=SMF(:,:,:,iblock))
          endif
+ 
+         !end_time = omp_get_wtime()
+
+         !print *,"time at vmix is ",end_time - start_time  
 
 !-----------------------------------------------------------------------
 !
@@ -1437,6 +1444,7 @@
 !
 !-----------------------------------------------------------------------
 
+      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k)NUM_THREADS(8) 
       do k = 1,km  ! recalculate new density
 
          call state(k,k,TRACER(:,:,k,1,newtime,iblock), &
@@ -1825,6 +1833,7 @@
 
         endif
    endif 
+
 
    WORKN = WORKN_HOST(:,:,:,k)
 

@@ -969,14 +969,14 @@
 !
 !-----------------------------------------------------------------------
   
-   start_time = omp_get_wtime() 
+   !start_time = omp_get_wtime() 
 
    call blmix(VISC, VDC, KPP_HBLT(:,:,bid), USTAR, BFSFC, STABLE, &
               KBL, GHAT, this_block) 
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
-   print *,"Time at Blmix is ",end_time - start_time
+   !print *,"Time at Blmix is ",end_time - start_time
 
 !-----------------------------------------------------------------------
 !
@@ -1072,7 +1072,6 @@
 
        do n=1,nt
          mt2=min(n,2)
-         !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(j,i)NUM_THREADS(8)  
          do j=1,ny_block
           do i=1,nx_block
 
@@ -1081,7 +1080,6 @@
           enddo
          enddo  
 
-         !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(j,i,k)NUM_THREADS(8) 
          do k=2,km
             do j=1,ny_block
                do i=1,nx_block
@@ -1156,7 +1154,6 @@
 
    if (partial_bottom_cells) then
       do k=2,km
-       !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
        do j=1,ny_block
         do i=1,nx_block
          if (k <= KMT(i,j,bid)) then
@@ -1170,7 +1167,6 @@
 
       VISC(:,:,1) = c0
       do k=2,km
-       !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
        do j=1,ny_block
         do i=1,nx_block
 
@@ -1240,7 +1236,7 @@
       enddo
    endif
 
-   end_time = omp_get_wtime()
+   !end_time = omp_get_wtime()
 
 
 !-----------------------------------------------------------------------
@@ -2537,7 +2533,7 @@
 
       else
 
-         !DIR$ COLLAPSE
+         !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(J,I)NUM_THREADS(8)
          do j=1,ny_block
          do i=1,nx_block
             if (k == KN(i,j)) then
@@ -2931,8 +2927,7 @@
    knxt = 2
 
 
-   !$OMP PARALLEL DO &
-   !$OMP DEFAULT(SHARED)PRIVATE(K,PRANDTL,RRHO,ALPHADT,BETADS,TALPHA,SBETA,DIFFDD)NUM_THREADS(8)
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(K,PRANDTL,RRHO,ALPHADT,BETADS,TALPHA,SBETA,DIFFDD)NUM_THREADS(8)
    do k=1,km
 
       if ( k < km ) then
@@ -3252,7 +3247,7 @@
 
    integer (int_kind) :: &
       i, j,              &  ! horizontal loop indices
-      k                     ! vertical level index
+      k,num_threads         ! vertical level index
 
    real (r8), dimension(nx_block,ny_block) ::  &
       WORK1, WORK2
@@ -3268,6 +3263,12 @@
 !     consistency checks 
 !
 !-----------------------------------------------------------------------
+
+   !if( omp_get_num_procs() == 240) then
+   !num_threads = 60
+   !else
+   !num_threads = 8
+   !endif
 
    if ( overwrite_hblt  .and.  ( .not.present(KBL)  .or.        &
                                  .not.present(HBLT) ) ) then      
