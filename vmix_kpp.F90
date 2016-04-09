@@ -840,8 +840,6 @@
 
    real (r8) ::  &
       factor
-  
-   real (r8) start_time,end_time
 
 !-----------------------------------------------------------------------
 !
@@ -863,13 +861,7 @@
 !
 !-----------------------------------------------------------------------
 
-   !start_time = omp_get_wtime()
-
    call buoydiff(DBLOC, DBSFC, TRCR, this_block)
-
-   end_time = omp_get_wtime()
-
-   !print *,"Time at buoydiff is ",end_time - start_time
 
    if (lniw_mixing) then
 !-----------------------------------------------------------------------
@@ -877,8 +869,6 @@
 !     when lniw_mixing, compute boundary layer depth now
 !
 !-----------------------------------------------------------------------
-
-    !start_time = omp_get_wtime()
 
      if (present(SMFT)) then
         call bldepth (DBLOC, DBSFC, TRCR, UUU, VVV, UCUR, VCUR, STF, SHF_QSW,   &
@@ -890,19 +880,9 @@
                       this_block, SMF=SMF)
      endif
 
-   !end_time = omp_get_wtime()
-
-   !print *,"Time at bldepth is ",end_time - start_time 
-
-   !start_time = omp_get_wtime()
-
 
      call compute_niw_energy_flux(VISC,VDC,UUU,VVV,KE_mix,UCUR,VCUR,KE_cur,  &
                                   DBLOC, KPP_HBLT(:,:,bid),KBL,En,this_block)
-
-   !end_time = omp_get_wtime()
-
-   !print *,"Time at energy_flux is ",end_time - start_time 
 
    endif ! if (lniw_mixing) then
 
@@ -912,16 +892,9 @@
 !  convection
 !
 !-----------------------------------------------------------------------
- 
-   start_time = omp_get_wtime()
 
    call ri_iwmix(DBLOC, VISC, VDC, UUU, VVV, RHOMIX,&
                  convect_diff, convect_visc, this_block)
-
-   end_time = omp_get_wtime()
-
-   print *,"Time at ri_mix is ",end_time - start_time
-   
 
 !-----------------------------------------------------------------------
 !
@@ -929,22 +902,13 @@
 !
 !-----------------------------------------------------------------------
 
-   !start_time = omp_get_wtime()
-
    if (ldbl_diff) call ddmix(VDC, TRCR, this_block)
-
-   !end_time = omp_get_wtime()
-
-   !print *,"Time at ddmix is ",end_time - start_time
-
 
 !-----------------------------------------------------------------------
 !
 !     compute boundary layer depth (when no niw mixing)
 !
 !-----------------------------------------------------------------------
-
-   start_time = omp_get_wtime()
 
    if (.not. lniw_mixing) then
      if (present(SMFT)) then
@@ -958,25 +922,14 @@
      endif
    endif ! .not. lniw_mixing
 
-   !end_time = omp_get_wtime()
-
-   !print *,"Time at bldepth is ",end_time - start_time
-
-
 !-----------------------------------------------------------------------
 !
 !  compute boundary layer diffusivities and match to interior values
 !
 !-----------------------------------------------------------------------
-  
-   !start_time = omp_get_wtime() 
 
    call blmix(VISC, VDC, KPP_HBLT(:,:,bid), USTAR, BFSFC, STABLE, &
               KBL, GHAT, this_block) 
-
-   !end_time = omp_get_wtime()
-
-   !print *,"Time at Blmix is ",end_time - start_time
 
 !-----------------------------------------------------------------------
 !
@@ -999,51 +952,41 @@
 !
 !-----------------------------------------------------------------------
 
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k,j,i,WORK1,WORK2,FCON)NUM_THREADS(8)
    do k=1,km-1           
 
-       do j=1,ny_block
-        do i=1,nx_block  
+      if (partial_bottom_cells) then
+         WORK1 = DBLOC(:,:,k)/(p5*(DZT(:,:,k  ,bid) + &
+                                   DZT(:,:,k+1,bid)))
+      else
+         WORK1 = DBLOC(:,:,k)/(zgrid(k) - zgrid(k+1))
+      end if
 
-         if (partial_bottom_cells) then 
+      if (BVSQcon /= c0) then
+         WORK2 = min(c1-(max(WORK1,BVSQcon))/BVSQcon, c1)
+         FCON  = (c1 - WORK2*WORK2)**3
+      else
+         where (WORK1 > c0)
+            FCON = c0
+         elsewhere
+            FCON = c1
+         end where
+      endif
 
-            WORK1(i,j) = DBLOC(i,j,k)/(p5*(DZT(i,j,k  ,bid) + &
-                                             DZT(i,j,k+1,bid)))
-
-         else
-
-            WORK1(i,j) = DBLOC(i,j,k)/(zgrid(k) - zgrid(k+1))
-
-         endif
-
-         if (BVSQcon /= c0) then
-
-            WORK2(i,j) = min(c1-(max(WORK1(i,j),BVSQcon))/BVSQcon, c1)
-            FCON(i,j)  = (c1 - WORK2(i,j)*WORK2(i,j))**3
- 
-         else
-         
-         if (WORK1(i,j) > c0) then
-            FCON(i,j) = c0
-         else
-            FCON(i,j) = c1
-         endif
-
-         endif
- 
       !*** add convection and reset sea floor values to zero
       
+
+      do j=1,ny_block
+      do i=1,nx_block
          if ( k >= KBL(i,j) ) then
             VISC(i,j,k)  = VISC(i,j,k)  + convect_visc * FCON(i,j)
             VDC(i,j,k,1) = VDC(i,j,k,1) + convect_diff * FCON(i,j)
             VDC(i,j,k,2) = VDC(i,j,k,2) + convect_diff * FCON(i,j)
          endif
          if (k >= KMT(i,j,bid)) then
-                  VISC(i,j,k  ) = c0
+         	  VISC(i,j,k  ) = c0
             VDC (i,j,k,1) = c0
             VDC (i,j,k,2) = c0
          endif
-
       end do
       end do
 
@@ -1066,70 +1009,24 @@
 !
 !-----------------------------------------------------------------------
 
-   !start_time = omp_get_wtime()
-
-   if (partial_bottom_cells) then
-
-       do n=1,nt
-         mt2=min(n,2)
-         do j=1,ny_block
-          do i=1,nx_block
-
-              KPP_SRC(i,j,1,n,bid) = STF(i,j,n)/dz(1)           &
-                                   *(-VDC(i,j,1,mt2)*GHAT(i,j,1))
-          enddo
-         enddo  
-
+   do n=1,nt
+      mt2=min(n,2)
+      KPP_SRC(:,:,1,n,bid) = STF(:,:,n)/dz(1)           &
+                             *(-VDC(:,:,1,mt2)*GHAT(:,:,1))
+      if (partial_bottom_cells) then
          do k=2,km
-            do j=1,ny_block
-               do i=1,nx_block
-
-                     KPP_SRC(i,j,k,n,bid) = STF(i,j,n)/DZT(i,j,k,bid)         &
-                                          *( VDC(i,j,k-1,mt2)*GHAT(i,j,k-1)   &
-                                          -VDC(i,j,k  ,mt2)*GHAT(i,j,k  ))
-
-                enddo
-            enddo    
-         enddo  !end k loop
-
-        enddo !end n loop  
-
-      else
-
-       do n=1,nt
-         mt2=min(n,2) 
-         !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(j,i)NUM_THREADS(8)  
-         do j=1,ny_block
-          do i=1,nx_block
-
-              KPP_SRC(i,j,1,n,bid) = STF(i,j,n)/dz(1)           &
-                                   *(-VDC(i,j,1,mt2)*GHAT(i,j,1))
-          enddo
+            KPP_SRC(:,:,k,n,bid) = STF(:,:,n)/DZT(:,:,k,bid)         &
+                                 *( VDC(:,:,k-1,mt2)*GHAT(:,:,k-1)   &
+                                   -VDC(:,:,k  ,mt2)*GHAT(:,:,k  ))
          enddo
-
-         !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(j,i,k)NUM_THREADS(8)
+      else
          do k=2,km
-          do j=1,ny_block
-            do i=1,nx_block
-
-            KPP_SRC(i,j,k,n,bid) = STF(i,j,n)/dz(k)                  &
-                                 *( VDC(i,j,k-1,mt2)*GHAT(i,j,k-1)   &
-                                   -VDC(i,j,k  ,mt2)*GHAT(i,j,k  ))
-            enddo
-           enddo 
-         enddo !end k loop
-
-       enddo !end n loop 
-
-   endif
-
-
-   !end_time = omp_get_wtime()
-
-
-   !if(my_task == master_task)then
-   !print *,"Time at where statments is ",end_time - start_time
-   !endif
+            KPP_SRC(:,:,k,n,bid) = STF(:,:,n)/dz(k)                  &
+                                 *( VDC(:,:,k-1,mt2)*GHAT(:,:,k-1)   &
+                                   -VDC(:,:,k  ,mt2)*GHAT(:,:,k  ))
+         enddo
+      endif
+   enddo
 
 !-----------------------------------------------------------------------
 !
@@ -1138,106 +1035,67 @@
 !
 !-----------------------------------------------------------------------
 
-
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
-   do j=1,ny_block
-   do i=1,nx_block
-      USTAR(i,j) = c0
-      if (KMT(i,j,bid) == 1) then
-           HMXL(i,j,bid) = zt(1)
-      else
-           HMXL(i,j,bid) = c0
-      endif
-   enddo
-   enddo 
-
+   USTAR = c0
+   where (KMT(:,:,bid) == 1)
+      HMXL(:,:,bid) = zt(1)
+   elsewhere
+      HMXL(:,:,bid) = c0
+   endwhere
 
    if (partial_bottom_cells) then
       do k=2,km
-       do j=1,ny_block
-        do i=1,nx_block
-         if (k <= KMT(i,j,bid)) then
-            STABLE(i,j) = zt(k-1) + p5*(DZT(i,j,k-1,bid) + DZT(i,j,k,bid))
-            USTAR(i,j) = max(DBSFC(i,j,k)/STABLE(i,j),USTAR(i,j))
-            HMXL(i,j,bid) = STABLE(i,j)
-         endif
-        enddo
-       enddo 
+         where (k <= KMT(:,:,bid))
+            STABLE = zt(k-1) + p5*(DZT(:,:,k-1,bid) + DZT(:,:,k,bid))
+            USTAR = max(DBSFC(:,:,k)/STABLE,USTAR)
+            HMXL(:,:,bid) = STABLE
+         endwhere
       enddo
 
       VISC(:,:,1) = c0
       do k=2,km
-       do j=1,ny_block
-        do i=1,nx_block
-
-         if (USTAR(i,j) > c0 ) then
-            VISC(i,j,k) = (DBSFC(i,j,k)-DBSFC(i,j,k-1))/ &
-                          (p5*(DZT(i,j,k,bid) + DZT(i,j,k-1,bid)))
-         endif
-
-         if ( VISC(i,j,k) >= USTAR(i,j) .and.              &
-                (VISC(i,j,k)-VISC(i,j,k-1)) /= c0 .and.  &
-                 USTAR(i,j) > c0 ) then   ! avoid divide by zero
-            BFSFC(i,j) = (VISC(i,j,k) - USTAR(i,j))/ &
-                    (VISC(i,j,k)-VISC(i,j,k-1))
+         where (USTAR > c0 )
+            VISC(:,:,k) = (DBSFC(:,:,k)-DBSFC(:,:,k-1))/ &
+                          (p5*(DZT(:,:,k,bid) + DZT(:,:,k-1,bid)))
+         end where
+         where ( VISC(:,:,k) >= USTAR .and.              &
+                (VISC(:,:,k)-VISC(:,:,k-1)) /= c0 .and.  &
+                 USTAR > c0 )   ! avoid divide by zero
+            BFSFC = (VISC(:,:,k) - USTAR)/ &
+                    (VISC(:,:,k)-VISC(:,:,k-1))
 ! tqian
 !            HMXL(:,:,bid) =   (zt(k-1) + p5*DZT(:,:,k-1,bid))*(c1-BFSFC) &
 !                            + (zt(k-1) - p5*DZT(:,:,k-1,bid))*BFSFC
-             HMXL(i,j,bid) =   (zt(k-1) + p25*(DZT(i,j,k-1,bid)+DZT(i,j,k,bid)))*(c1-BFSFC(i,j)) &
-                             + (zt(k-1) - p25*(DZT(i,j,k-2,bid)+DZT(i,j,k-1,bid)))*BFSFC(i,j)
+             HMXL(:,:,bid) =   (zt(k-1) + p25*(DZT(:,:,k-1,bid)+DZT(:,:,k,bid)))*(c1-BFSFC) &
+                             + (zt(k-1) - p25*(DZT(:,:,k-2,bid)+DZT(:,:,k-1,bid)))*BFSFC
 
-            USTAR(i,j) = c0
-         endif
+            USTAR(:,:) = c0
+         endwhere
       enddo
-     enddo
-    enddo
- 
    else
-
-   VISC(:,:,1) = c0
-
       do k=2,km
-       !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)   
-       do j=1,ny_block
-        do i=1,nx_block
-           if (k <= KMT(i,j,bid)) then
-            USTAR(i,j) = max(DBSFC(i,j,k)/zt(k),USTAR(i,j))
-            HMXL(i,j,bid) = zt(k)
-           endif
-        enddo 
-       enddo
+         where (k <= KMT(:,:,bid))
+            USTAR = max(DBSFC(:,:,k)/zt(k),USTAR)
+            HMXL(:,:,bid) = zt(k)
+         endwhere
       enddo
 
+      VISC(:,:,1) = c0
       do k=2,km
-       !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
-       do j=1,ny_block
-        do i=1,nx_block 
-         if (USTAR(i,j) > c0 ) then
-            VISC(i,j,k) = (DBSFC(i,j,k)-DBSFC(i,j,k-1))/ &
+         where (USTAR > c0 )
+            VISC(:,:,k) = (DBSFC(:,:,k)-DBSFC(:,:,k-1))/ &
                           (zt(k) - zt(k-1))
-         endif
- 
-
-             if( VISC(i,j,k) >= USTAR(i,j) .and.              &
-                (VISC(i,j,k)-VISC(i,j,k-1)) /= c0 .and.  &
-                 USTAR(i,j) > c0 ) then   ! avoid divide by zero
-
-                 BFSFC(i,j) = (VISC(i,j,k) - USTAR(i,j))/ &
-                       (VISC(i,j,k)-VISC(i,j,k-1))
-                 HMXL(i,j,bid) = -p5*(zgrid(k  ) + zgrid(k-1))*(c1-BFSFC(i,j)) &
-                                 -p5*(zgrid(k-1) + zgrid(k-2))*BFSFC(i,j)
-                 USTAR(i,j) = c0
-
-             endif
-
-          enddo
-         enddo 
-         
+         end where
+         where ( VISC(:,:,k) >= USTAR .and.              &
+                (VISC(:,:,k)-VISC(:,:,k-1)) /= c0 .and.  &
+                 USTAR > c0 )   ! avoid divide by zero
+            BFSFC = (VISC(:,:,k) - USTAR)/ &
+                    (VISC(:,:,k)-VISC(:,:,k-1))
+            HMXL(:,:,bid) = -p5*(zgrid(k  ) + zgrid(k-1))*(c1-BFSFC) &
+                            -p5*(zgrid(k-1) + zgrid(k-2))*BFSFC
+            USTAR(:,:) = c0
+         endwhere
       enddo
    endif
-
-   !end_time = omp_get_wtime()
-
 
 !-----------------------------------------------------------------------
 !EOC
@@ -1330,7 +1188,6 @@
    KVMIX_M     = c0
    WORK0(:,:,0)= c0
 
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(K,J,I,FRI,VSHEAR,RI_LOC)NUM_THREADS(8)
    do k = 1,km
 
 !-----------------------------------------------------------------------
@@ -1394,8 +1251,7 @@
  
       FRI            =  p25 * WORK0(:,:,1)
       WORK0(:,:,km+1) =       WORK0(:,:,km)
-
-      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(K,J,I,RI_LOC,FRI)NUM_THREADS(8)
+ 
       do k=1,km
          !DIR$ NODEP
          do j=1,ny_block
@@ -1437,7 +1293,6 @@
 !     convection is added later
 !
 !-----------------------------------------------------------------------
-
 
       if ( ltidal_mixing ) then
 
@@ -1605,7 +1460,8 @@
 !
 !-----------------------------------------------------------------------
 
-      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
+      !DIR$ NODEP
+      !DIR$ COLLAPSE
       do j=1,ny_block
       !DIR$ NODEP
       do i=1,nx_block
@@ -1796,8 +1652,6 @@
    real (r8) :: &
       ni_obs_factor = 0.8_r8 ! scaling factor for obs vs model
 
-   real (r8) start_time,end_time
-
 !-----------------------------------------------------------------------
 !
 !  compute friction velocity USTAR.  compute on U-grid and average
@@ -1808,11 +1662,7 @@
    bid = this_block%local_id
 
    if (present(SMFT)) then
-     do j=1,ny_block
-      do i=1,nx_block
-         USTAR(i,j) = sqrt(sqrt(SMFT(i,j,1)**2 + SMFT(i,j,2)**2))
-      enddo
-     enddo
+      USTAR = sqrt(sqrt(SMFT(:,:,1)**2 + SMFT(:,:,2)**2))
    else
       WORK = sqrt(sqrt(SMF(:,:,1)**2 + SMF(:,:,2)**2))
       call ugrid_to_tgrid(USTAR,WORK,bid)
@@ -1835,7 +1685,6 @@
 !
 !-----------------------------------------------------------------------
 
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
    do j=1,ny_block
    do i=1,nx_block
       if (RHO1(i,j) /= c0) then
@@ -1882,7 +1731,6 @@
 
    HLANGM = c0
 
-
    do kl=1,km
       if (partial_bottom_cells) then
       	 if (kl > 1) then
@@ -1902,7 +1750,6 @@
       end do
       end do
    enddo
-
 
    if ( lcheckekmo ) then
 
@@ -1958,9 +1805,6 @@
 
    if ( lniw_mixing .and. linertial ) then
 
-
-     print *,"in here at liw_mixing"
-
      do j=1,ny_block
        do i=1,nx_block
          niuel(i,j)=c0
@@ -1996,7 +1840,6 @@
        enddo
      enddo
 
-
    endif  ! if ( lniw_mixing .and. linertial ) then
 
    do kl = 2,km
@@ -2022,7 +1865,6 @@
       endif
 
       VSHEAR(:,1) = c0
-      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(J,I)NUM_THREADS(8)
       do j=2,ny_block
          VSHEAR(1,j) = c0
          do i=2,nx_block
@@ -2092,7 +1934,6 @@
          HMONOB(:,:,kdn) = STABLE*cmonob*USTAR*USTAR*USTAR/vonkar/BFSFC + &
                           (STABLE-c1)*zgrid(km)
 
-
          !DIR$ COLLAPSE
          do j=1,ny_block
          do i=1,nx_block
@@ -2102,8 +1943,6 @@
                            (z_up + ZKL(i,j))
                HLIMIT(i,j) = (HMONOB(i,j,kdn) - WORK(i,j)*ZKL(i,j))/ &
                              (c1 - WORK(i,j))
-
-
 
             endif
          end do
@@ -2118,7 +1957,7 @@
 
       SIGMA = epssfc
 
-      call wscale_bldepth_host(SIGMA, ZKL, USTAR, BFSFC, 2, WM, WS)
+      call wscale(SIGMA, ZKL, USTAR, BFSFC, 2, WM, WS)
 
 !-----------------------------------------------------------------------
 !
@@ -2126,6 +1965,7 @@
 !     in WM.
 !
 !-----------------------------------------------------------------------
+
       if (partial_bottom_cells) then
          if (kl < km) then
             B_FRQNCY = sqrt( &
@@ -2166,27 +2006,20 @@
                                        DZU(:,:,kl-1,bid) -       &
                                        DZU(:,:,1,bid)))**2)
       else
+         WORK = MERGE( (zgrid(1)-zgrid(kl))*DBSFC(:,:,kl), &
+                      c0, KMT(:,:,bid) >= kl)
 
-        !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
-         do j=1,nx_block
-          do i=1,ny_block 
+         if (lniw_mixing) then
+           RI_BULK(:,:,kdn) = WORK/(VSHEAR+WM+eps)
+         else
+           if ( linertial ) then
+             RI_BULK(:,:,kdn) = WORK/(VSHEAR+WM+USTAR*BOLUS_SP(:,:,bid)+eps)
+           else
+             RI_BULK(:,:,kdn) = WORK/(VSHEAR+WM+eps)
+           endif
+         endif
+      endif
 
-               WORK(i,j) = MERGE( (zgrid(1)-zgrid(kl))*DBSFC(i,j,kl), &
-                                            c0, KMT(i,j,bid) >= kl)
-
-               if (lniw_mixing) then
-                RI_BULK(i,j,kdn) = WORK(i,j)/(VSHEAR(i,j)+WM(i,j)+eps)
-               else
-               if ( linertial ) then
-               RI_BULK(i,j,kdn) = WORK(i,j)/(VSHEAR(i,j) + WM(i,j) + USTAR(i,j) * BOLUS_SP(i,j,bid)+eps)
-               else
-               RI_BULK(i,j,kdn) = WORK(i,j)/(VSHEAR(i,j)+WM(i,j)+eps)
-              endif
-              endif
-           enddo
-          enddo
-
-        endif 
 !-----------------------------------------------------------------------
 !
 !       find hbl where Rib = Ricr. if possible, use a quadratic
@@ -2198,7 +2031,6 @@
 !       compute Langmuir depth always 
 !-----------------------------------------------------------------------
 
-      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
       do j=1,ny_block
       do i=1,nx_block
          if ( KBL(i,j) == KMT(i,j,bid) .and.  &
@@ -2233,7 +2065,6 @@
          endif
       enddo
       enddo
- 
 
 !-----------------------------------------------------------------------
 !
@@ -2289,7 +2120,6 @@
       enddo
 
    endif
-  
 
 !-----------------------------------------------------------------------
 !
@@ -2297,7 +2127,7 @@
 !
 !-----------------------------------------------------------------------
 
-   call smooth_hblt_host (.true., .false., bid, HBLT=HBLT, KBL=KBL)
+   call smooth_hblt (.true., .false., bid, HBLT=HBLT, KBL=KBL)
 
 !-----------------------------------------------------------------------
 !
@@ -2562,7 +2392,7 @@
 
       else
 
-         !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(J,I)NUM_THREADS(8)
+         !DIR$ COLLAPSE
          do j=1,ny_block
          do i=1,nx_block
             if (k == KN(i,j)) then
@@ -2625,7 +2455,6 @@
 !
 !-----------------------------------------------------------------------
 
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(K,I,J,SIGMA,F1,WM,WS)NUM_THREADS(8)SCHEDULE(DYNAMIC,1)
    do k = 1,km       
 
       if (partial_bottom_cells) then
@@ -2932,7 +2761,7 @@
 !
 !-----------------------------------------------------------------------
 
-   integer (int_kind) ::  k,kup,knxt,i,j
+   integer (int_kind) ::  k,kup,knxt
 
    real (r8), dimension(nx_block,ny_block) :: &
       ALPHADT,           &! alpha*DT  across interfaces
@@ -2955,18 +2784,15 @@
    kup  = 1
    knxt = 2
 
+   PRANDTL = merge(-c2,TRCR(:,:,1,1),TRCR(:,:,1,1) < -c2)
 
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(K,PRANDTL,RRHO,ALPHADT,BETADS,TALPHA,SBETA,DIFFDD)NUM_THREADS(8)
-   do k=1,km
-
-      if ( k < km ) then
-
-         PRANDTL = merge(-c2,TRCR(:,:,k,1),TRCR(:,:,k,1) < -c2)
-
-         call state(k, k, PRANDTL, TRCR(:,:,k,2), this_block, &
+   call state(1, 1, PRANDTL, TRCR(:,:,1,2), this_block, &
                     RHOFULL=RRHO, &
                     DRHODT=TALPHA(:,:,kup), DRHODS=SBETA(:,:,kup))
 
+   do k=1,km
+
+      if ( k < km ) then
 
          PRANDTL = merge(-c2,TRCR(:,:,k+1,1),TRCR(:,:,k+1,1) < -c2)
 
@@ -2981,6 +2807,9 @@
          BETADS  = p5*( SBETA(:,:,kup) +  SBETA(:,:,knxt)) &
                      *(TRCR(:,:,k,2) - TRCR(:,:,k+1,2))
 
+         kup  = knxt
+         knxt = 3 - kup
+
       else
 
          ALPHADT = c0
@@ -2994,48 +2823,36 @@
 !
 !-----------------------------------------------------------------------
 
-      do j=1,nx_block
-       do i=1,ny_block
+      where ( ALPHADT > BETADS .and. BETADS > c0 )
 
-           if ( ALPHADT(i,j) > BETADS(i,j) .and. BETADS(i,j) > c0 ) then
+         RRHO       = MIN(ALPHADT/BETADS, Rrho0)
+         DIFFDD     = dsfmax*(c1-(RRHO-c1)/(Rrho0-c1))**3
+         VDC(:,:,k,1) = VDC(:,:,k,1) + 0.7_r8*DIFFDD
+         VDC(:,:,k,2) = VDC(:,:,k,2) + DIFFDD
 
-            RRHO(i,j)       = MIN(ALPHADT(i,j)/BETADS(i,j), Rrho0)
-            DIFFDD(i,j)     = dsfmax*(c1-(RRHO(i,j)-c1)/(Rrho0-c1))**3
-            VDC(i,j,k,1) = VDC(i,j,k,1) + 0.7_r8*DIFFDD(i,j)
-            VDC(i,j,k,2) = VDC(i,j,k,2) + DIFFDD(i,j)
+      endwhere
 
-            endif
-
-       enddo
-      enddo  
 !-----------------------------------------------------------------------
 !
 !     diffusive convection
 !
 !-----------------------------------------------------------------------
- 
-      do j=1,nx_block
-       do i=1,ny_block
 
-          if ( ALPHADT(i,j) < c0 .and. BETADS(i,j) < c0 .and. ALPHADT(i,j) > BETADS(i,j) ) then
-           RRHO(i,j)    = ALPHADT(i,j) / BETADS(i,j)
-           DIFFDD(i,j)  = 1.5e-2_r8*0.909_r8* &
-                          exp(4.6_r8*exp(-0.54_r8*(c1/RRHO(i,j)-c1)))
-           PRANDTL(i,j) = 0.15_r8*RRHO(i,j)
-          else
-           RRHO(i,j)    = c0
-           DIFFDD(i,j)  = c0
-           PRANDTL(i,j) = c0
-          endif
+      where ( ALPHADT < c0 .and. BETADS < c0 .and. ALPHADT > BETADS )
+         RRHO    = ALPHADT / BETADS
+         DIFFDD  = 1.5e-2_r8*0.909_r8* &
+                   exp(4.6_r8*exp(-0.54_r8*(c1/RRHO-c1)))
+         PRANDTL = 0.15_r8*RRHO
+      elsewhere
+         RRHO    = c0
+         DIFFDD  = c0
+         PRANDTL = c0
+      endwhere
 
-          if (RRHO(i,j) > p5) PRANDTL(i,j) = (1.85_r8 - 0.85_r8/RRHO(i,j))*RRHO(i,j)
+      where (RRHO > p5) PRANDTL = (1.85_r8 - 0.85_r8/RRHO)*RRHO
 
-          VDC(i,j,k,1) = VDC(i,j,k,1) + DIFFDD(i,j)
-          VDC(i,j,k,2) = VDC(i,j,k,2) + PRANDTL(i,j)*DIFFDD(i,j)
-
-        enddo
-       enddo 
-     
+      VDC(:,:,k,1) = VDC(:,:,k,1) + DIFFDD
+      VDC(:,:,k,2) = VDC(:,:,k,2) + PRANDTL*DIFFDD
 
    end do
 
@@ -3118,12 +2935,9 @@
 !
 !-----------------------------------------------------------------------
 
-   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(TEMPK,RHO1,RHOKM,RHOK,I,J)NUM_THREADS(8)
    do k = 2,km
 
       TEMPK(:,:,klvl) = merge(-c2,TRCR(:,:,k,1),TRCR(:,:,k,1) < -c2)
-
-      TEMPK(:,:,kprev) = merge(-c2,TRCR(:,:,k-1,1),TRCR(:,:,k-1,1) < -c2) 
 
       call state(k, k, TEMPSFC,          TRCR(:,:,1  ,2), &
                        this_block, RHOFULL=RHO1)
@@ -3145,6 +2959,10 @@
          if (k-1 >= KMT(i,j,bid)) DBLOC(i,j,k-1) = c0
       end do
       end do
+
+      ktmp  = klvl
+      klvl  = kprev
+      kprev = ktmp
 
    enddo
 
@@ -3276,7 +3094,7 @@
 
    integer (int_kind) :: &
       i, j,              &  ! horizontal loop indices
-      k,num_threads         ! vertical level index
+      k                     ! vertical level index
 
    real (r8), dimension(nx_block,ny_block) ::  &
       WORK1, WORK2
@@ -3292,12 +3110,6 @@
 !     consistency checks 
 !
 !-----------------------------------------------------------------------
-
-   !if( omp_get_num_procs() == 240) then
-   !num_threads = 60
-   !else
-   !num_threads = 8
-   !endif
 
    if ( overwrite_hblt  .and.  ( .not.present(KBL)  .or.        &
                                  .not.present(HBLT) ) ) then      
@@ -3375,7 +3187,7 @@
 
 
    do k=1,km
-     !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(ztmp,j,i)NUM_THREADS(60)
+     !!$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(ztmp,j,i)NUM_THREADS(60)
      do j=2,ny_block-1
        do i=2,nx_block-1
 
@@ -3392,13 +3204,14 @@
 
        enddo
      enddo
-     !$OMP END PARALLEL DO
+     !!$OMP END PARALLEL DO
    enddo
 
    if ( overwrite_hblt  .and.  .not.use_hmxl ) then
 
      HBLT = WORK2
 
+     start_time = omp_get_wtime()
 
      do k=1,km
        do j=2,ny_block-1
@@ -3748,331 +3561,7 @@
  
  end subroutine iw_reset
 
-
- subroutine smooth_hblt_host (overwrite_hblt, use_hmxl, &
-                         bid, HBLT, KBL, SMOOTH_OUT)
-
-! !DESCRIPTION:
-!  This subroutine uses a 1-1-4-1-1 Laplacian filter one time
-!  on HBLT or HMXL to reduce any horizontal two-grid-point noise.
-!  If HBLT is overwritten, KBL is adjusted after smoothing.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
-
-   logical (log_kind), intent(in) :: &
-      overwrite_hblt,   &    ! if .true.,  HBLT is overwritten
-                             ! if .false., the result is returned in
-                             !  a dummy array
-      use_hmxl               ! if .true., smooth HMXL
-                             ! if .false., smooth HBLT
-
-   integer (int_kind), intent(in) :: &
-      bid                    ! local block address
-
-! !INPUT/OUTPUT PARAMETERS:
-
-   real (r8), dimension(nx_block,ny_block), optional, intent(inout) :: &
-      HBLT                   ! boundary layer depth
-
-   integer (int_kind), dimension(nx_block,ny_block), optional, intent(inout) :: &
-      KBL                    ! index of first lvl below hbl
-
-! !OUTPUT PARAMETERS:
-
-   real (r8), dimension(nx_block,ny_block), optional, intent(out) ::  &
-      SMOOTH_OUT              ! optional output array containing the
-                              !  smoothened field if overwrite_hblt is false
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!     local variables
-!
-!-----------------------------------------------------------------------
-   character (char_len) ::  &
-      message
-
-   integer (int_kind) :: &
-      i, j,              &  ! horizontal loop indices
-      k,num_threads         ! vertical level index
-
-   real (r8), dimension(nx_block,ny_block) ::  &
-      WORK1, WORK2
-
-   real (r8) ::  &
-     cc, cw, ce, cn, cs, &  ! averaging weights
-     ztmp                   ! temp for level depth
-
-   real (r8) start_time,end_time
-
-!-----------------------------------------------------------------------
-!
-!     consistency checks 
-!
-!-----------------------------------------------------------------------
-
-   !if( omp_get_num_procs() == 240) then
-   !num_threads = 60
-   !else
-   !num_threads = 8
-   !endif
-
-   if ( overwrite_hblt  .and.  ( .not.present(KBL)  .or.        &
-                                 .not.present(HBLT) ) ) then      
-     message = 'incorrect subroutine arguments for smooth_hblt, error # 1'
-     print *,message
-     !call exit_POP (sigAbort, trim(message))
-   endif
-
-   if ( .not.overwrite_hblt  .and.  .not.present(SMOOTH_OUT) ) then 
-     print *,message 
-     message = 'incorrect subroutine arguments for smooth_hblt, error # 2'
-     !call exit_POP (sigAbort, trim(message))
-   endif
-
-   if ( use_hmxl .and. .not.present(SMOOTH_OUT) ) then          
-     message = 'incorrect subroutine arguments for smooth_hblt, error # 3'
-     print *,message
-     !call exit_POP (sigAbort, trim(message))
-   endif
-
-   if ( overwrite_hblt  .and.  use_hmxl ) then                  
-     message = 'incorrect subroutine arguments for smooth_hblt, error # 4'
-     print *,message 
-     !call exit_POP (sigAbort, trim(message))
-   endif
-
-!-----------------------------------------------------------------------
-!
-!     perform one smoothing pass since we cannot do the necessary 
-!     boundary updates for multiple passes.
-!
-!-----------------------------------------------------------------------
-
-
-   if ( use_hmxl ) then
-     WORK2 = HMXL(:,:,bid)
-   else
-     WORK2 = HBLT
-   endif
-
-   WORK1 = WORK2
-
-   do j=2,ny_block-1
-     do i=2,nx_block-1
-       if ( KMT(i,j,bid) /= 0 ) then
-         cw = p125
-         ce = p125
-         cn = p125
-         cs = p125
-         cc = p5
-         if ( KMT(i-1,j,bid) == 0 ) then
-           cc = cc + cw
-           cw = c0
-         endif
-         if ( KMT(i+1,j,bid) == 0 ) then
-           cc = cc + ce
-           ce = c0
-         endif
-         if ( KMT(i,j-1,bid) == 0 ) then
-           cc = cc + cs
-           cs = c0
-         endif
-         if ( KMT(i,j+1,bid) == 0 ) then
-           cc = cc + cn
-           cn = c0
-         endif
-         WORK2(i,j) =  cw * WORK1(i-1,j)   &
-                     + ce * WORK1(i+1,j)   &
-                     + cs * WORK1(i,j-1)   &
-                     + cn * WORK1(i,j+1)   &
-                     + cc * WORK1(i,j)
-       endif
-     enddo
-   enddo
-
-   do k=1,km
-     !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8) 
-     do j=2,ny_block-1
-       do i=2,nx_block-1
-
-         if (partial_bottom_cells) then
-           ztmp = -zgrid(k-1) + p5*(DZT(i,j,k-1,bid) + &
-                                    DZT(i,j,k  ,bid))
-         else
-           ztmp = -zgrid(k)
-         endif
-
-         if ( k == KMT(i,j,bid)  .and.  WORK2(i,j) > ztmp ) then
-           WORK2(i,j) = ztmp
-         endif
-
-       enddo
-     enddo
-   enddo
-
-   if ( overwrite_hblt  .and.  .not.use_hmxl ) then
-
-     HBLT = WORK2
-
-
-     do k=1,km
-       do j=2,ny_block-1
-         do i=2,nx_block-1
-
-           if (partial_bottom_cells) then
-             ztmp = -zgrid(k-1) + p5*(DZT(i,j,k-1,bid) + &
-                                      DZT(i,j,k  ,bid))
-           else
-             ztmp = -zgrid(k)
-           endif
-
-           if ( KMT(i,j,bid) /= 0            .and.  &
-                ( HBLT(i,j) >  -zgrid(k-1) ) .and.  &
-                ( HBLT(i,j) <= ztmp        ) ) KBL(i,j) = k
-     
-         enddo
-       enddo
-     enddo
-
-   else
-
-     SMOOTH_OUT = WORK2
-
-   endif
- 
-
-!-----------------------------------------------------------------------
-
- end subroutine smooth_hblt_host
-
-
 !***********************************************************************
-
-!***********************************************************************
-!BOP
-! !IROUTINE: wscale
-! !INTERFACE:
-
- subroutine wscale_bldepth_host(SIGMA, HBL, USTAR, BFSFC, m_or_s, WM, WS)
-
-! !DESCRIPTION:
-!  Computes turbulent velocity scales.
-!
-!  For $\zeta \geq 0, 
-!    w_m = w_s = \kappa U^\star/(1+5\zeta)$
-!
-!  For $\zeta_m \leq \zeta < 0, 
-!    w_m = \kappa U^\star (1-16\zeta)^{1\over 4}$
-!
-!  For $\zeta_s \leq \zeta < 0, 
-!    w_s = \kappa U^\star (1-16\zeta)^{1\over 2}$
-!
-!  For $\zeta < \zeta_m, 
-!    w_m = \kappa U^\star (a_m - c_m\zeta)^{1\over 3}$
-!
-!  For $\zeta < \zeta_s, 
-!    w_s = \kappa U^\star (a_s - c_s\zeta)^{1\over 3}$
-!
-!  where $\kappa$ is the von Karman constant.
-!
-! !REVISION HISTORY:
-!  same as module
-
-! !INPUT PARAMETERS:
-
-   integer (int_kind), intent(in) :: &
-      m_or_s              ! flag =1 for wm only, 2 for ws, 3 for both
-
-   real (r8), dimension(nx_block,ny_block), intent(in) :: &
-      SIGMA,             &! normalized depth (d/hbl)
-      HBL,               &! boundary layer depth
-      BFSFC,             &! surface buoyancy forcing
-      USTAR               ! surface friction velocity
-
-! !OUTPUT PARAMETERS:
-
-   real (r8), dimension(nx_block,ny_block), intent(out) :: &
-      WM,                &! turb velocity scales: momentum
-      WS                  ! turb velocity scales: tracer
-
-!EOP
-!BOC
-!-----------------------------------------------------------------------
-!
-!  local variables
-!
-!-----------------------------------------------------------------------
-
-   integer (int_kind) :: i,j  ! dummy loop indices
-
-   real (r8), dimension(nx_block,ny_block) :: &
-      ZETA,           &! d/L or sigma*hbl/L(monin-obk)
-      ZETAH            ! sigma*hbl*vonkar*BFSFC or ZETA = ZETAH/USTAR**3
-
-!-----------------------------------------------------------------------
-!
-!  compute zetah and zeta - surface layer is special case
-!
-!-----------------------------------------------------------------------
-
-   ZETAH = SIGMA*HBL*vonkar*BFSFC
-   ZETA  = ZETAH/(USTAR**3 + eps)
-
-!-----------------------------------------------------------------------
-!
-!  compute velocity scales for momentum
-!
-!-----------------------------------------------------------------------
-
-   if (m_or_s == 1 .or. m_or_s == 3) then
-      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(J,I)NUM_THREADS(8)
-      do j=1,ny_block
-      do i=1,nx_block
-         if (ZETA(i,j) >= c0) then ! stable region
-            WM(i,j) = vonkar*USTAR(i,j)/(c1 + c5*ZETA(i,j))
-         else if (ZETA(i,j) >= zeta_m) then
-            WM(i,j) = vonkar*USTAR(i,j)*(c1 - c16*ZETA(i,j))**p25
-         else
-            WM(i,j) = vonkar*(a_m*(USTAR(i,j)**3)-c_m*ZETAH(i,j))**p33
-         endif
-      end do
-      end do
-   endif
-
-!-----------------------------------------------------------------------
-!
-!  compute velocity scales for tracers
-!
-!-----------------------------------------------------------------------
-
-   if (m_or_s == 2 .or. m_or_s == 3) then
-      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(J,I)NUM_THREADS(8)
-      do j=1,ny_block
-      do i=1,nx_block
-         if (ZETA(i,j) >= c0) then
-            WS(i,j) = vonkar*USTAR(i,j)/(c1 + c5*ZETA(i,j))
-         else if (ZETA(i,j) >= zeta_s) then
-            WS(i,j) = vonkar*USTAR(i,j)*SQRT(c1 - c16*ZETA(i,j))
-         else
-            WS(i,j) = vonkar*(a_s*(USTAR(i,j)**3)-c_s*ZETAH(i,j))**p33
-         endif
-      end do
-      end do
-   endif
-
-!-----------------------------------------------------------------------
-!EOC
-
- end subroutine wscale_bldepth_host
-
-!***********************************************************************
-
-
 
  end module vmix_kpp
 

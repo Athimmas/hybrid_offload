@@ -545,8 +545,6 @@
    type (block) ::        &
       this_block           ! block information for current block
 
-   real (r8) start_time, end_time
-
 !-----------------------------------------------------------------------
 !
 !  compute flux velocities in ghost cells
@@ -596,30 +594,29 @@
 !        compute vertical viscosity and diffusion coeffs
 !
 !-----------------------------------------------------------------------
-        if(k==1)then
+        !if(k==1)then
 
-           if(nsteps_run > 1 ) then
+           !if(nsteps_run > 1 ) then
 
-              !dir$ offload_wait target(mic:micno)wait(off_sig)
+              !!dir$ offload_wait target(mic:micno)wait(off_sig)
 
-              WORKN_HOST = WORKN_PHI
+              !WORKN_HOST = WORKN_PHI
 
-              VDC_GM_HOST = VDC_GM
+              !VDC_GM_HOST = VDC_GM
 
-              VDC_PHI = VDC
-              VDC = VDC_HOST
-              VDC_HOST = VDC_PHI
+              !VDC_PHI = VDC
+              !VDC = VDC_HOST
+              !VDC_HOST = VDC_PHI
  
-           else
+           !else
 
-               VDC = VDC_HOST
+               !VDC = VDC_HOST
 
-           endif
+           !endif
 
-        endif
+        !endif
 
-         !start_time = omp_get_wtime()
-   
+
          if (lsmft_avail) then
             call vmix_coeffs(k,TRACER (:,:,:,:,mixtime,iblock), &
                                UVEL   (:,:,:  ,mixtime,iblock), &
@@ -641,10 +638,6 @@
                                SHF_QSW(:,:            ,iblock), &
                                this_block, SMF=SMF(:,:,:,iblock))
          endif
- 
-         !end_time = omp_get_wtime()
-
-         !print *,"time at vmix is ",end_time - start_time  
 
 !-----------------------------------------------------------------------
 !
@@ -945,7 +938,6 @@
 !  now loop over blocks to do momentum equations
 !
 !-----------------------------------------------------------------------
-
 
    !$OMP PARALLEL DO PRIVATE(iblock,this_block,k,km1,kp1,n, &
    !$OMP                     WUK,FX,FY,WORK1,WORK2)
@@ -1445,7 +1437,6 @@
 !
 !-----------------------------------------------------------------------
 
-      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(k)NUM_THREADS(8) 
       do k = 1,km  ! recalculate new density
 
          call state(k,k,TRACER(:,:,k,1,newtime,iblock), &
@@ -1794,65 +1785,48 @@
 !
 !-----------------------------------------------------------------------
   
-   if(k==1)then
+   !if(k==1)then
 
    
-   if(itsdone == 0) then   
-   !dir$ offload_transfer target(mic:micno)  nocopy(SLX,SLY,SF_SUBM_X,SF_SUBM_Y,SF_SLX,SF_SLY : alloc_if(.true.) free_if(.false.)) &
-   !dir$ in(KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,WORKN_PHI,WTOP_ISOP,WBOT_ISOP: alloc_if(.true.) free_if(.false.) )  
-   itsdone = itsdone + 1
-   endif
-
-
-   !start_time = omp_get_wtime() 
+   !if(itsdone == 0) then   
+   !!dir$ offload_transfer target(mic:micno)  nocopy(SLX,SLY,SF_SUBM_X,SF_SUBM_Y,SF_SLX,SF_SLY : alloc_if(.true.) free_if(.false.)) &
+   !!dir$ in(KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,WORKN_PHI,WTOP_ISOP,WBOT_ISOP: alloc_if(.true.) free_if(.false.) )  
+   !itsdone = itsdone + 1
+   !endif
  
-   !dir$ offload begin target(mic:micno)in(kk,TMIX,UMIX,VMIX,this_block,hmix_tracer_itype,tavg_HDIFE_TRACER,tavg_HDIFN_TRACER,tavg_HDIFB_TRACER) &
-   !dir$ in(lsubmesoscale_mixing,dt,dtu,HYX,HXY,RZ_SAVE,RX,RY,TX,TY,TZ,KMT,KMTE,KMTN,implicit_vertical_mix,vmix_itype,KPP_HBLT,HMXL) &
-   !dir$ in(HYXW,HXYS,UIT,VIT,RB,RBR,BL_DEPTH) &
-   !dir$ in(kappa_isop_type,kappa_thic_type, kappa_freq,slope_control,SLA_SAVE,nsteps_total, ah,ah_bolus, ah_bkg_bottom,ah_bkg_srfbl) &
-   !dir$ in(slm_r,slm_b,compute_kappa,BUOY_FREQ_SQ,SIGMA_TOPO_MASK,dz,dzw,dzwr,zw,dzr,DYT,DXT,HUW,HUS,TAREA_R,HTN,HTE,pi,zt) &
-   !dir$ in(luse_const_horiz_len_scale,hor_length_scale,TIME_SCALE,efficiency_factor,TLT,my_task,master_task) & 
-   !dir$ in(max_hor_grid_scale,mix_pass,grav,zgrid,DZT,partial_bottom_cells,FCORT,linertial,ldiag_cfl,radian,TLAT,eod_last) &
-   !dir$ in(ltavg_on,num_avail_tavg_fields,sigo,state_coeffs,to,so,use_const_ah_bkg_srfbl,transition_layer_on,tavg_HDIFS,tavg_HDIFT) &
-   !dir$ out(WORKN_PHI:alloc_if(.false.) free_if(.false.)) inout(VDC,VDC_GM) &
-   !dir$ nocopy(SLX,SLY,SF_SUBM_X,SF_SUBM_Y,KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,SF_SLX,SF_SLY,WTOP_ISOP : alloc_if(.false.) free_if(.false.) ) &
-   !dir$ nocopy( WBOT_ISOP : alloc_if(.false.) free_if(.false.) )signal(off_sig)
+   !!dir$ offload begin target(mic:micno)in(kk,TMIX,UMIX,VMIX,this_block,hmix_tracer_itype,tavg_HDIFE_TRACER,tavg_HDIFN_TRACER,tavg_HDIFB_TRACER) &
+   !!dir$ in(lsubmesoscale_mixing,dt,dtu,HYX,HXY,RZ_SAVE,RX,RY,TX,TY,TZ,KMT,KMTE,KMTN,implicit_vertical_mix,vmix_itype,KPP_HBLT,HMXL) &
+   !!dir$ in(HYXW,HXYS,UIT,VIT,RB,RBR,BL_DEPTH) &
+   !!dir$ in(kappa_isop_type,kappa_thic_type, kappa_freq,slope_control,SLA_SAVE,nsteps_total, ah,ah_bolus, ah_bkg_bottom,ah_bkg_srfbl) &
+   !!dir$ in(slm_r,slm_b,compute_kappa,BUOY_FREQ_SQ,SIGMA_TOPO_MASK,dz,dzw,dzwr,zw,dzr,DYT,DXT,HUW,HUS,TAREA_R,HTN,HTE,pi,zt) &
+   !!dir$ in(luse_const_horiz_len_scale,hor_length_scale,TIME_SCALE,efficiency_factor,TLT,my_task,master_task) & 
+   !!dir$ in(max_hor_grid_scale,mix_pass,grav,zgrid,DZT,partial_bottom_cells,FCORT,linertial,ldiag_cfl,radian,TLAT,eod_last) &
+   !!dir$ in(ltavg_on,num_avail_tavg_fields,sigo,state_coeffs,to,so,use_const_ah_bkg_srfbl,transition_layer_on,tavg_HDIFS,tavg_HDIFT) &
+   !!dir$ out(WORKN_PHI:alloc_if(.false.) free_if(.false.)) inout(VDC,VDC_GM) &
+   !!dir$ nocopy(SLX,SLY,SF_SUBM_X,SF_SUBM_Y,KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,SF_SLX,SF_SLY,WTOP_ISOP : alloc_if(.false.) free_if(.false.) ) &
+   !!dir$ nocopy( WBOT_ISOP : alloc_if(.false.) free_if(.false.) )signal(off_sig)
 
-   do kk=1,km
-   call hdifft(kk, WORKN_PHI(:,:,:,kk), TCUR, UCUR, VCUR, this_block)
-   enddo
+   !do kk=1,km
+   !call hdifft(kk, WORKN_PHI(:,:,:,kk), TCUR, UCUR, VCUR, this_block)
+   !enddo
 
-   !dir$ end offload
+   !!dir$ end offload
 
-    !end_time = omp_get_wtime()
+   !endif
 
-    !print *,"PHI hdifft time ",end_time - start_time
+   !if(nsteps_run == 1)then 
+        !if(k==1)then
 
+                !do kk=1,km
+                call hdifft(kk, WORKN, TMIX, UMIX, VMIX, this_block)
+                !VDC_GM_HOST = VDC_GM
+                !VDC_HOST = VDC
+                !enddo
 
-   endif
+        !endif
+   !endif 
 
-   if(nsteps_run == 1)then 
-        if(k==1)then
-
-                !start_time = omp_get_wtime()
-
-                do kk=1,km
-                call hdifft(kk, WORKN_HOST(:,:,:,kk), TMIX, UMIX, VMIX, this_block)
-                enddo
-
-                VDC_GM_HOST = VDC_GM
-                VDC_HOST = VDC
-            
-                !end_time = omp_get_wtime() 
- 
-                !print *,"Host hdifft time ",end_time - start_time 
-
-
-        endif
-   endif 
-
-
-   WORKN = WORKN_HOST(:,:,:,k)
+   !WORKN = WORKN_HOST(:,:,:,k)
 
    !if(my_task==master_task)then
 

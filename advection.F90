@@ -51,7 +51,6 @@
    use registry
    use overflows
    use overflow_type
-   use omp_lib
 
    implicit none
    private
@@ -191,8 +190,6 @@
       luse_centered,       &! is centered used by any tracer
       luse_upwind3,        &! is upwind3 used by any tracer
       luse_lw_lim           ! is lw_lim used by any tracer
-
-   real (r8), dimension(nx_block,ny_block,km) :: RHOK1_BUF,RHOK1M_BUF,WORK_BUF,WORK3_BUF,WORK4_BUF
 
 !EOC
 !***********************************************************************
@@ -1567,7 +1564,7 @@
    integer (int_kind) :: &
      i,j,n,              &! dummy loop indices
      ib, ie, jb, je,     &! domain limits
-     bid,kk               ! local block address
+     bid                  ! local block address
 
    real (r8), dimension(nx_block,ny_block) :: & 
      UTE,UTW,VTN,VTS,  &! tracer flux velocities across E,W,N,S faces
@@ -1617,54 +1614,6 @@
       VTS  = FLUX_VEL_prev(:,:,4,bid)
       WTKB = FLUX_VEL_prev(:,:,5,bid)
    end if
-
-!-----------------------------------------------------------------------
-!
-!  for state
-!
-!-----------------------------------------------------------------------
- 
-     if(k == 1) then
-
-       !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(kk)NUM_THREADS(8)
-       do kk=1,km
-          call state(kk,1,TRCR(:,:,kk,1),TRCR(:,:,kk,2),this_block,RHOFULL=RHOK1_BUF(:,:,kk))
-
-          if (kk == 1) then
-              RHOK1M_BUF(:,:,kk) = RHOK1_BUF(:,:,kk)
-          else
-              call state(kk-1,1,TRCR(:,:,kk,1),TRCR(:,:,kk,2),this_block,RHOFULL=RHOK1M_BUF(:,:,kk))
-          endif
-
-          call state(kk,kk,TRCR(:,:,kk,1),TRCR(:,:,kk,2),this_block,RHOOUT=WORK_BUF(:,:,kk))
-
-          if (kk == 1 ) then
-              WORK3_BUF(:,:,kk) = WORK_BUF(:,:,kk)
-          else
-              call state(kk-1,kk,TRCR(:,:,kk-1,1),TRCR(:,:,kk-1,2),this_block,RHOOUT=WORK3_BUF(:,:,kk))
-              WORK3_BUF(:,:,kk) = p5*(WORK3_BUF(:,:,kk) + WORK_BUF(:,:,kk))
-          endif
-
-          if (kk == km) then
-              WORK4_BUF(:,:,kk) = WORK_BUF(:,:,kk)
-          else
-              call state(kk+1,kk,TRCR(:,:,kk+1,1),TRCR(:,:,kk+1,2),this_block,RHOOUT=WORK4_BUF(:,:,kk))
-          endif
-
-       enddo
-
-      endif
-
-
-      RHOK1 = RHOK1_BUF(:,:,k)
-      RHOK1M = RHOK1M_BUF(:,:,k)
-      WORK = WORK_BUF(:,:,k)
-      WORK3 = WORK3_BUF(:,:,k)
-      WORK4 = WORK4_BUF(:,:,k)
-
-
-
-
 
 !-----------------------------------------------------------------------
 !
@@ -1807,6 +1756,14 @@
        accumulate_tavg_now(tavg_VRHO) .or.  &
        accumulate_tavg_now(tavg_WRHO)) then
 
+       call state(k,1,TRCR(:,:,k,1), TRCR(:,:,k,2), this_block, RHOFULL=RHOK1)
+
+       if (k == 1) then
+          RHOK1M = RHOK1
+       else
+          call state(k-1,1,TRCR(:,:,k,1), TRCR(:,:,k,2), this_block, RHOFULL=RHOK1M)
+       endif
+
        call accumulate_tavg_field(RHOK1,tavg_PD,bid,k)
 
        WORK = FUE*(RHOK1 + eoshift(RHOK1,dim=1,shift=1))
@@ -1840,8 +1797,20 @@
        accumulate_tavg_now(tavg_UQ)   .or.  &
        accumulate_tavg_now(tavg_VQ) ) then
 
+       call state(k,k,TRCR(:,:,k,1),TRCR(:,:,k,2), this_block,RHOOUT=WORK)
+
+       if (k == 1 ) then
+          WORK3 = WORK
+       else
+          call state(k-1,k,TRCR(:,:,k-1,1),TRCR(:,:,k-1,2), this_block,RHOOUT=WORK3)
+          WORK3 = p5*(WORK3 + WORK)
+       endif
 
        if (k == km) then
+          WORK4 = WORK
+       else
+          call state(k+1,k,TRCR(:,:,k+1,1),TRCR(:,:,k+1,2),this_block,RHOOUT=WORK4)
+
           do j=jb,je
           do i=ib,ie
              if (k /= KMT(i,j,bid)) then
