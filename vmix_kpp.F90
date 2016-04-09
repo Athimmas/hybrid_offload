@@ -867,7 +867,7 @@
 
    call buoydiff(DBLOC, DBSFC, TRCR, this_block)
 
-   !end_time = omp_get_wtime()
+   end_time = omp_get_wtime()
 
    !print *,"Time at buoydiff is ",end_time - start_time
 
@@ -918,7 +918,7 @@
    call ri_iwmix(DBLOC, VISC, VDC, UUU, VVV, RHOMIX,&
                  convect_diff, convect_visc, this_block)
 
-   !end_time = omp_get_wtime()
+   end_time = omp_get_wtime()
 
    !print *,"Time at ri_mix is ",end_time - start_time
    
@@ -944,7 +944,7 @@
 !
 !-----------------------------------------------------------------------
 
-   !start_time = omp_get_wtime()
+   start_time = omp_get_wtime()
 
    if (.not. lniw_mixing) then
      if (present(SMFT)) then
@@ -1794,6 +1794,8 @@
    real (r8) :: &
       ni_obs_factor = 0.8_r8 ! scaling factor for obs vs model
 
+   real (r8) start_time,end_time
+
 !-----------------------------------------------------------------------
 !
 !  compute friction velocity USTAR.  compute on U-grid and average
@@ -1804,7 +1806,11 @@
    bid = this_block%local_id
 
    if (present(SMFT)) then
-      USTAR = sqrt(sqrt(SMFT(:,:,1)**2 + SMFT(:,:,2)**2))
+     do j=1,ny_block
+      do i=1,nx_block
+         USTAR(i,j) = sqrt(sqrt(SMFT(i,j,1)**2 + SMFT(i,j,2)**2))
+      enddo
+     enddo
    else
       WORK = sqrt(sqrt(SMF(:,:,1)**2 + SMF(:,:,2)**2))
       call ugrid_to_tgrid(USTAR,WORK,bid)
@@ -1827,6 +1833,7 @@
 !
 !-----------------------------------------------------------------------
 
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
    do j=1,ny_block
    do i=1,nx_block
       if (RHO1(i,j) /= c0) then
@@ -1873,6 +1880,7 @@
 
    HLANGM = c0
 
+
    do kl=1,km
       if (partial_bottom_cells) then
       	 if (kl > 1) then
@@ -1892,6 +1900,7 @@
       end do
       end do
    enddo
+
 
    if ( lcheckekmo ) then
 
@@ -1947,6 +1956,9 @@
 
    if ( lniw_mixing .and. linertial ) then
 
+
+     print *,"in here at liw_mixing"
+
      do j=1,ny_block
        do i=1,nx_block
          niuel(i,j)=c0
@@ -1982,6 +1994,7 @@
        enddo
      enddo
 
+
    endif  ! if ( lniw_mixing .and. linertial ) then
 
    do kl = 2,km
@@ -2007,6 +2020,7 @@
       endif
 
       VSHEAR(:,1) = c0
+      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(J,I)NUM_THREADS(8)
       do j=2,ny_block
          VSHEAR(1,j) = c0
          do i=2,nx_block
@@ -2076,6 +2090,7 @@
          HMONOB(:,:,kdn) = STABLE*cmonob*USTAR*USTAR*USTAR/vonkar/BFSFC + &
                           (STABLE-c1)*zgrid(km)
 
+
          !DIR$ COLLAPSE
          do j=1,ny_block
          do i=1,nx_block
@@ -2085,6 +2100,8 @@
                            (z_up + ZKL(i,j))
                HLIMIT(i,j) = (HMONOB(i,j,kdn) - WORK(i,j)*ZKL(i,j))/ &
                              (c1 - WORK(i,j))
+
+
 
             endif
          end do
@@ -2099,7 +2116,7 @@
 
       SIGMA = epssfc
 
-      call wscale(SIGMA, ZKL, USTAR, BFSFC, 2, WM, WS)
+      call wscale_bldepth_host(SIGMA, ZKL, USTAR, BFSFC, 2, WM, WS)
 
 !-----------------------------------------------------------------------
 !
@@ -2147,20 +2164,27 @@
                                        DZU(:,:,kl-1,bid) -       &
                                        DZU(:,:,1,bid)))**2)
       else
-         WORK = MERGE( (zgrid(1)-zgrid(kl))*DBSFC(:,:,kl), &
-                      c0, KMT(:,:,bid) >= kl)
 
-         if (lniw_mixing) then
-           RI_BULK(:,:,kdn) = WORK/(VSHEAR+WM+eps)
-         else
-           if ( linertial ) then
-             RI_BULK(:,:,kdn) = WORK/(VSHEAR+WM+USTAR*BOLUS_SP(:,:,bid)+eps)
-           else
-             RI_BULK(:,:,kdn) = WORK/(VSHEAR+WM+eps)
-           endif
-         endif
-      endif
+        !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
+         do j=1,nx_block
+          do i=1,ny_block 
 
+               WORK(i,j) = MERGE( (zgrid(1)-zgrid(kl))*DBSFC(i,j,kl), &
+                                            c0, KMT(i,j,bid) >= kl)
+
+               if (lniw_mixing) then
+                RI_BULK(i,j,kdn) = WORK(i,j)/(VSHEAR(i,j)+WM(i,j)+eps)
+               else
+               if ( linertial ) then
+               RI_BULK(i,j,kdn) = WORK(i,j)/(VSHEAR(i,j) + WM(i,j) + USTAR(i,j) * BOLUS_SP(i,j,bid)+eps)
+               else
+               RI_BULK(i,j,kdn) = WORK(i,j)/(VSHEAR(i,j)+WM(i,j)+eps)
+              endif
+              endif
+           enddo
+          enddo
+
+        endif 
 !-----------------------------------------------------------------------
 !
 !       find hbl where Rib = Ricr. if possible, use a quadratic
@@ -2172,6 +2196,7 @@
 !       compute Langmuir depth always 
 !-----------------------------------------------------------------------
 
+      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
       do j=1,ny_block
       do i=1,nx_block
          if ( KBL(i,j) == KMT(i,j,bid) .and.  &
@@ -2206,6 +2231,7 @@
          endif
       enddo
       enddo
+ 
 
 !-----------------------------------------------------------------------
 !
@@ -2261,6 +2287,7 @@
       enddo
 
    endif
+  
 
 !-----------------------------------------------------------------------
 !
@@ -3921,6 +3948,125 @@
 
  end subroutine smooth_hblt_host
 
+
+!***********************************************************************
+
+!***********************************************************************
+!BOP
+! !IROUTINE: wscale
+! !INTERFACE:
+
+ subroutine wscale_bldepth_host(SIGMA, HBL, USTAR, BFSFC, m_or_s, WM, WS)
+
+! !DESCRIPTION:
+!  Computes turbulent velocity scales.
+!
+!  For $\zeta \geq 0, 
+!    w_m = w_s = \kappa U^\star/(1+5\zeta)$
+!
+!  For $\zeta_m \leq \zeta < 0, 
+!    w_m = \kappa U^\star (1-16\zeta)^{1\over 4}$
+!
+!  For $\zeta_s \leq \zeta < 0, 
+!    w_s = \kappa U^\star (1-16\zeta)^{1\over 2}$
+!
+!  For $\zeta < \zeta_m, 
+!    w_m = \kappa U^\star (a_m - c_m\zeta)^{1\over 3}$
+!
+!  For $\zeta < \zeta_s, 
+!    w_s = \kappa U^\star (a_s - c_s\zeta)^{1\over 3}$
+!
+!  where $\kappa$ is the von Karman constant.
+!
+! !REVISION HISTORY:
+!  same as module
+
+! !INPUT PARAMETERS:
+
+   integer (int_kind), intent(in) :: &
+      m_or_s              ! flag =1 for wm only, 2 for ws, 3 for both
+
+   real (r8), dimension(nx_block,ny_block), intent(in) :: &
+      SIGMA,             &! normalized depth (d/hbl)
+      HBL,               &! boundary layer depth
+      BFSFC,             &! surface buoyancy forcing
+      USTAR               ! surface friction velocity
+
+! !OUTPUT PARAMETERS:
+
+   real (r8), dimension(nx_block,ny_block), intent(out) :: &
+      WM,                &! turb velocity scales: momentum
+      WS                  ! turb velocity scales: tracer
+
+!EOP
+!BOC
+!-----------------------------------------------------------------------
+!
+!  local variables
+!
+!-----------------------------------------------------------------------
+
+   integer (int_kind) :: i,j  ! dummy loop indices
+
+   real (r8), dimension(nx_block,ny_block) :: &
+      ZETA,           &! d/L or sigma*hbl/L(monin-obk)
+      ZETAH            ! sigma*hbl*vonkar*BFSFC or ZETA = ZETAH/USTAR**3
+
+!-----------------------------------------------------------------------
+!
+!  compute zetah and zeta - surface layer is special case
+!
+!-----------------------------------------------------------------------
+
+   ZETAH = SIGMA*HBL*vonkar*BFSFC
+   ZETA  = ZETAH/(USTAR**3 + eps)
+
+!-----------------------------------------------------------------------
+!
+!  compute velocity scales for momentum
+!
+!-----------------------------------------------------------------------
+
+   if (m_or_s == 1 .or. m_or_s == 3) then
+      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(J,I)NUM_THREADS(8)
+      do j=1,ny_block
+      do i=1,nx_block
+         if (ZETA(i,j) >= c0) then ! stable region
+            WM(i,j) = vonkar*USTAR(i,j)/(c1 + c5*ZETA(i,j))
+         else if (ZETA(i,j) >= zeta_m) then
+            WM(i,j) = vonkar*USTAR(i,j)*(c1 - c16*ZETA(i,j))**p25
+         else
+            WM(i,j) = vonkar*(a_m*(USTAR(i,j)**3)-c_m*ZETAH(i,j))**p33
+         endif
+      end do
+      end do
+   endif
+
+!-----------------------------------------------------------------------
+!
+!  compute velocity scales for tracers
+!
+!-----------------------------------------------------------------------
+
+   if (m_or_s == 2 .or. m_or_s == 3) then
+      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(J,I)NUM_THREADS(8)
+      do j=1,ny_block
+      do i=1,nx_block
+         if (ZETA(i,j) >= c0) then
+            WS(i,j) = vonkar*USTAR(i,j)/(c1 + c5*ZETA(i,j))
+         else if (ZETA(i,j) >= zeta_s) then
+            WS(i,j) = vonkar*USTAR(i,j)*SQRT(c1 - c16*ZETA(i,j))
+         else
+            WS(i,j) = vonkar*(a_s*(USTAR(i,j)**3)-c_s*ZETAH(i,j))**p33
+         endif
+      end do
+      end do
+   endif
+
+!-----------------------------------------------------------------------
+!EOC
+
+ end subroutine wscale_bldepth_host
 
 !***********************************************************************
 

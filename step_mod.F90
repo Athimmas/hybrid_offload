@@ -44,6 +44,7 @@
    use budget_diagnostics
    use overflows
    use overflow_type
+   use omp_lib
 
    implicit none
    private
@@ -121,6 +122,8 @@
 
    type (block) ::        &
       this_block          ! block information for current block
+
+   real (r8) :: start_time, end_time
 
 !-----------------------------------------------------------------------
 !
@@ -284,6 +287,8 @@
 !
 !-----------------------------------------------------------------------
 
+      !start_time = omp_get_wtime()  
+
       if(profile_barrier) call POP_Barrier
       call timer_start(timer_baroclinic)
       call baroclinic_driver(ZX,ZY,DH,DHU, errorCode)
@@ -294,6 +299,10 @@
             'step: error in baroclinic driver')
          return
       endif
+
+      !end_time = omp_get_wtime()
+
+      !print *,"time at baroclinic is",end_time - start_time
 
 !-----------------------------------------------------------------------
 !
@@ -335,6 +344,8 @@
 !
 !-----------------------------------------------------------------------
 
+      !start_time = omp_get_wtime()
+
       if(profile_barrier) call POP_Barrier
       call timer_start(timer_barotropic)
       call barotropic_driver(ZX,ZY,errorCode)
@@ -347,6 +358,10 @@
          return
       endif
 
+      !end_time = omp_get_wtime() 
+
+      !print *,"time at barotrop is",end_time - start_time
+
 !-----------------------------------------------------------------------
 !
 !     update tracers using surface height at new time
@@ -354,9 +369,12 @@
 !
 !-----------------------------------------------------------------------
 
+ 
       call timer_start(timer_baroclinic)
       call baroclinic_correct_adjust
       call timer_stop(timer_baroclinic)
+
+
 
       if ( overflows_on .and. overflows_interactive ) then
          call ovf_UV_solution
@@ -470,6 +488,8 @@
 !
 !-----------------------------------------------------------------------
 
+      !start_time = omp_get_wtime() 
+
       !$OMP PARALLEL DO PRIVATE(iblock,k,i,j)
       do iblock = 1,nblocks_clinic
 
@@ -486,6 +506,10 @@
             enddo
             enddo
          enddo
+
+       !end_time = omp_get_wtime()
+
+       !print *,"time at barotropic is ", end_time - start_time  
 
 !-----------------------------------------------------------------------
 !

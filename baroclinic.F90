@@ -1804,7 +1804,7 @@
    endif
 
 
-   start_time = omp_get_wtime() 
+   !start_time = omp_get_wtime() 
  
    !dir$ offload begin target(mic:micno)in(kk,TMIX,UMIX,VMIX,this_block,hmix_tracer_itype,tavg_HDIFE_TRACER,tavg_HDIFN_TRACER,tavg_HDIFB_TRACER) &
    !dir$ in(lsubmesoscale_mixing,dt,dtu,HYX,HXY,RZ_SAVE,RX,RY,TX,TY,TZ,KMT,KMTE,KMTN,implicit_vertical_mix,vmix_itype,KPP_HBLT,HMXL) &
@@ -1824,9 +1824,9 @@
 
    !dir$ end offload
 
-    end_time = omp_get_wtime()
+    !end_time = omp_get_wtime()
 
-    print *,"PHI hdifft time ",end_time - start_time
+    !print *,"PHI hdifft time ",end_time - start_time
 
 
    endif
@@ -1834,7 +1834,7 @@
    if(nsteps_run == 1)then 
         if(k==1)then
 
-                start_time = omp_get_witme()
+                !start_time = omp_get_wtime()
 
                 do kk=1,km
                 call hdifft(kk, WORKN_HOST(:,:,:,kk), TMIX, UMIX, VMIX, this_block)
@@ -1843,9 +1843,9 @@
                 VDC_GM_HOST = VDC_GM
                 VDC_HOST = VDC
             
-                end_time = omp_get_wtime() 
+                !end_time = omp_get_wtime() 
  
-                print *,"Host hdifft time ",end_time - start_time 
+                !print *,"Host hdifft time ",end_time - start_time 
 
 
         endif
