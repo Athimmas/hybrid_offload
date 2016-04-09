@@ -913,14 +913,14 @@
 !
 !-----------------------------------------------------------------------
  
-   !start_time = omp_get_wtime()
+   start_time = omp_get_wtime()
 
    call ri_iwmix(DBLOC, VISC, VDC, UUU, VVV, RHOMIX,&
                  convect_diff, convect_visc, this_block)
 
    end_time = omp_get_wtime()
 
-   !print *,"Time at ri_mix is ",end_time - start_time
+   print *,"Time at ri_mix is ",end_time - start_time
    
 
 !-----------------------------------------------------------------------
@@ -1330,6 +1330,7 @@
    KVMIX_M     = c0
    WORK0(:,:,0)= c0
 
+   !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(K,J,I,FRI,VSHEAR,RI_LOC)NUM_THREADS(8)
    do k = 1,km
 
 !-----------------------------------------------------------------------
@@ -1393,7 +1394,8 @@
  
       FRI            =  p25 * WORK0(:,:,1)
       WORK0(:,:,km+1) =       WORK0(:,:,km)
- 
+
+      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(K,J,I,RI_LOC,FRI)NUM_THREADS(8)
       do k=1,km
          !DIR$ NODEP
          do j=1,ny_block
@@ -1435,6 +1437,7 @@
 !     convection is added later
 !
 !-----------------------------------------------------------------------
+
 
       if ( ltidal_mixing ) then
 
@@ -1602,8 +1605,7 @@
 !
 !-----------------------------------------------------------------------
 
-      !DIR$ NODEP
-      !DIR$ COLLAPSE
+      !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(I,J)NUM_THREADS(8)
       do j=1,ny_block
       !DIR$ NODEP
       do i=1,nx_block
