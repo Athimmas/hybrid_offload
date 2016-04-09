@@ -1785,7 +1785,7 @@
 !
 !-----------------------------------------------------------------------
   
-   !if(k==1)then
+   if(k==1)then
 
    
    !if(itsdone == 0) then   
@@ -1794,39 +1794,43 @@
    !itsdone = itsdone + 1
    !endif
  
-   !!dir$ offload begin target(mic:micno)in(kk,TMIX,UMIX,VMIX,this_block,hmix_tracer_itype,tavg_HDIFE_TRACER,tavg_HDIFN_TRACER,tavg_HDIFB_TRACER) &
-   !!dir$ in(lsubmesoscale_mixing,dt,dtu,HYX,HXY,RZ_SAVE,RX,RY,TX,TY,TZ,KMT,KMTE,KMTN,implicit_vertical_mix,vmix_itype,KPP_HBLT,HMXL) &
-   !!dir$ in(HYXW,HXYS,UIT,VIT,RB,RBR,BL_DEPTH) &
-   !!dir$ in(kappa_isop_type,kappa_thic_type, kappa_freq,slope_control,SLA_SAVE,nsteps_total, ah,ah_bolus, ah_bkg_bottom,ah_bkg_srfbl) &
-   !!dir$ in(slm_r,slm_b,compute_kappa,BUOY_FREQ_SQ,SIGMA_TOPO_MASK,dz,dzw,dzwr,zw,dzr,DYT,DXT,HUW,HUS,TAREA_R,HTN,HTE,pi,zt) &
-   !!dir$ in(luse_const_horiz_len_scale,hor_length_scale,TIME_SCALE,efficiency_factor,TLT,my_task,master_task) & 
-   !!dir$ in(max_hor_grid_scale,mix_pass,grav,zgrid,DZT,partial_bottom_cells,FCORT,linertial,ldiag_cfl,radian,TLAT,eod_last) &
-   !!dir$ in(ltavg_on,num_avail_tavg_fields,sigo,state_coeffs,to,so,use_const_ah_bkg_srfbl,transition_layer_on,tavg_HDIFS,tavg_HDIFT) &
-   !!dir$ out(WORKN_PHI:alloc_if(.false.) free_if(.false.)) inout(VDC,VDC_GM) &
-   !!dir$ nocopy(SLX,SLY,SF_SUBM_X,SF_SUBM_Y,KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,SF_SLX,SF_SLY,WTOP_ISOP : alloc_if(.false.) free_if(.false.) ) &
-   !!dir$ nocopy( WBOT_ISOP : alloc_if(.false.) free_if(.false.) )signal(off_sig)
+   !dir$ offload begin target(mic:micno)in(kk,TMIX,UMIX,VMIX,this_block,hmix_tracer_itype,tavg_HDIFE_TRACER,tavg_HDIFN_TRACER,tavg_HDIFB_TRACER) &
+   !dir$ in(lsubmesoscale_mixing,dt,dtu,HYX,HXY,RZ_SAVE,RX,RY,TX,TY,TZ,KMT,KMTE,KMTN,implicit_vertical_mix,vmix_itype,KPP_HBLT,HMXL) &
+   !dir$ in(HYXW,HXYS,UIT,VIT,RB,RBR,BL_DEPTH) &
+   !dir$ in(kappa_isop_type,kappa_thic_type, kappa_freq,slope_control,SLA_SAVE,nsteps_total, ah,ah_bolus, ah_bkg_bottom,ah_bkg_srfbl) &
+   !dir$ in(slm_r,slm_b,compute_kappa,BUOY_FREQ_SQ,SIGMA_TOPO_MASK,dz,dzw,dzwr,zw,dzr,DYT,DXT,HUW,HUS,TAREA_R,HTN,HTE,pi,zt) &
+   !dir$ in(luse_const_horiz_len_scale,hor_length_scale,TIME_SCALE,efficiency_factor,TLT,my_task,master_task) & 
+   !dir$ in(max_hor_grid_scale,mix_pass,grav,zgrid,DZT,partial_bottom_cells,FCORT,linertial,ldiag_cfl,radian,TLAT,eod_last) &
+   !dir$ in(ltavg_on,num_avail_tavg_fields,sigo,state_coeffs,to,so,use_const_ah_bkg_srfbl,transition_layer_on,tavg_HDIFS,tavg_HDIFT) &
+   !dir$ out(WORKN_PHI) inout(VDC,VDC_GM) &
+   !dir$ in(SLX,SLY,SF_SUBM_X,SF_SUBM_Y,KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,SF_SLX,SF_SLY,WTOP_ISOP) &
+   !dir$ in( WBOT_ISOP)
 
-   !do kk=1,km
-   !call hdifft(kk, WORKN_PHI(:,:,:,kk), TCUR, UCUR, VCUR, this_block)
-   !enddo
+   do kk=1,km
+   call hdifft(kk, WORKN_PHI(:,:,:,kk), TCUR, UCUR, VCUR, this_block)
+   enddo
 
-   !!dir$ end offload
+   !dir$ end offload
 
-   !endif
+   endif
 
-   !if(nsteps_run == 1)then 
-        !if(k==1)then
+   if(nsteps_run == 1)then 
+        if(k==1)then
 
-                !do kk=1,km
-                call hdifft(kk, WORKN, TMIX, UMIX, VMIX, this_block)
+                do kk=1,km
+                call hdifft(kk, WORKN_HOST(:,:,:,kk), TMIX, UMIX, VMIX, this_block)
                 !VDC_GM_HOST = VDC_GM
                 !VDC_HOST = VDC
-                !enddo
+                enddo
 
-        !endif
-   !endif 
+        endif
+   endif 
 
-   !WORKN = WORKN_HOST(:,:,:,k)
+   if(nstep_run == 1) then
+   WORKN = WORKN_HOST(:,:,:,k)
+   else
+   WORKN = WORKN_PHI(:,:,:,k)
+   endif
 
    !if(my_task==master_task)then
 
