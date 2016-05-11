@@ -61,20 +61,9 @@
                           ! possible modification by Gent-McWilliams
                           ! horizontal mixing parameterization
 
-  real (r8), dimension(:,:,:,:,:), allocatable, public :: &
-      VDC_HOST                 
-
-  real (r8), dimension(:,:,:,:,:), allocatable, public :: &
-      VDC_PHI
-
    !dir$ attributes offload:mic :: VDC_GM
    real (r8), dimension(:,:,:,:), allocatable, public, target :: &
       VDC_GM              ! Gent-McWilliams contribution to VDC
-
-  real (r8), dimension(:,:,:,:), allocatable, public :: &
-      VDC_GM_HOST     ! Gent-McWilliams contribution to VDC
-
-
 
    integer (int_kind), parameter, public :: &
       vmix_type_const = 1,  & ! integer identifiers for desired
@@ -413,10 +402,6 @@
    case(vmix_type_kpp)
       allocate (VDC(nx_block,ny_block,0:km+1,2,nblocks_clinic), &
                 VVC(nx_block,ny_block,km,      nblocks_clinic))
-
-      allocate (VDC_HOST(nx_block,ny_block,0:km+1,2,nblocks_clinic), &
-                VDC_PHI (nx_block,ny_block,0:km+1,2,nblocks_clinic))
-
       call init_vmix_kpp(VDC,VVC)
       call get_timer(timer_vmix_coeffs,'VMIX_COEFFICIENTS_KPP', &
                                   nblocks_clinic, distrb_clinic%nprocs)
@@ -1274,7 +1259,7 @@
       if (accumulate_tavg_now(tavg_DIA_IMPVF_TRACER(n))) then
          do k=1,km-1
             if (allocated(VDC_GM)) then
-               WORK1 = VDC(:,:,k,mt2,bid) - VDC_GM_HOST(:,:,k,bid)
+               WORK1 = VDC(:,:,k,mt2,bid) - VDC_GM(:,:,k,bid)
             else
                WORK1 = VDC(:,:,k,mt2,bid)
             endif

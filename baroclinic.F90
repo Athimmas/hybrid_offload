@@ -43,7 +43,7 @@
                              lsubmesoscale_mixing,tavg_HDIFS,tavg_HDIFT
    use vertical_mix, only: vmix_coeffs, implicit_vertical_mix, vdiffu,       &
        vdifft, impvmixt, impvmixu, impvmixt_correct, convad, impvmixt_tavg,  &
-       vmix_itype,VDC_GM,VDC,VDC_GM_HOST,VDC_HOST,VDC_PHI 
+       vmix_itype,VDC_GM,VDC 
    use vmix_kpp, only: add_kpp_sources,KPP_HBLT,HMXL,zgrid,linertial
    use diagnostics, only: ldiag_cfl, cfl_check, ldiag_global,                &
        DIAG_KE_ADV_2D, DIAG_KE_PRESS_2D, DIAG_KE_HMIX_2D, DIAG_KE_VMIX_2D,   &
@@ -81,6 +81,7 @@
    use mix_submeso, only: SF_SUBM_X,SF_SUBM_Y,luse_const_horiz_len_scale,hor_length_scale, &
                     TIME_SCALE,efficiency_factor,max_hor_grid_scale,FZTOP_SUBM
    use omp_lib
+   use registry, only: registry_storage
 
    implicit none
    private
@@ -157,15 +158,13 @@
       off_sig = 1       
 
    !dir$ attributes offload:mic :: WORKN_PHI
-   real (r8), dimension(:,:,:,:),allocatable :: &
+   real (r8), dimension(nx_block,ny_block,nt,km) :: &
       WORKN_PHI
 
-  real (r8), dimension(nx_block,ny_block,nt,km) :: &
-      WORKN_HOST = 1
+   real (r8), dimension(nx_block,ny_block,nt,km) :: WORKN_HOST 
 
-  integer :: &
+   integer :: &
       micno 
- 
 
 !EOC
 !***********************************************************************
@@ -450,8 +449,6 @@
 
    enddo
 
-   allocate(WORKN_PHI(nx_block,ny_block,nt,km))
-
    micno = mod(my_task+1,2)
 
 !-----------------------------------------------------------------------
@@ -594,28 +591,14 @@
 !        compute vertical viscosity and diffusion coeffs
 !
 !-----------------------------------------------------------------------
-        !if(k==1)then
 
-           !if(nsteps_run > 1 ) then
+         if(k == 1 .and. nsteps_run > 1 ) then
 
-              !!dir$ offload_wait target(mic:micno)wait(off_sig)
+         !dir$ offload_wait target(mic:micno)wait(off_sig)
 
-              !WORKN_HOST = WORKN_PHI
+         WORKN_HOST = WORKN_PHI 
 
-              !VDC_GM_HOST = VDC_GM
-
-              !VDC_PHI = VDC
-              !VDC = VDC_HOST
-              !VDC_HOST = VDC_PHI
- 
-           !else
-
-               !VDC = VDC_HOST
-
-           !endif
-
-        !endif
-
+         endif
 
          if (lsmft_avail) then
             call vmix_coeffs(k,TRACER (:,:,:,:,mixtime,iblock), &
@@ -1035,7 +1018,6 @@
 
       enddo ! vertical (k) loop
 
-     !!dir$ offload_wait target(mic:1)wait(off_sig)
          
 !-----------------------------------------------------------------------
 !
@@ -1756,7 +1738,6 @@
       n,kk,              &! dummy tracer index
       bid                 ! local_block id
 
-
    real (r8), dimension(nx_block,ny_block,nt) :: &
       FT,                &! sum of terms in dT/dt for the nth tracer
       WORKN               ! work array used for various dT/dt terms 
@@ -1764,9 +1745,13 @@
    real (r8), dimension(nx_block,ny_block) :: &
       WORKSW
 
+  real (r8), dimension(nx_block,ny_block,nt,km) :: &
+      WORKN_PHI_TEMP 
+
   integer , save :: itsdone=0
 
   real (r8) start_time , end_time
+
 !-----------------------------------------------------------------------
 !
 !  initialize some arrays
@@ -1778,33 +1763,45 @@
 
    bid = this_block%local_id
 
-   !print *,micno,my_task
 !-----------------------------------------------------------------------
 !
 !  horizontal diffusion HDiff(T)
 !
 !-----------------------------------------------------------------------
-  
-   if(k==1)then
-
    
-   !if(itsdone == 0) then   
-   !!dir$ offload_transfer target(mic:micno)  nocopy(SLX,SLY,SF_SUBM_X,SF_SUBM_Y,SF_SLX,SF_SLY : alloc_if(.true.) free_if(.false.)) &
-   !!dir$ in(KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,WORKN_PHI,WTOP_ISOP,WBOT_ISOP: alloc_if(.true.) free_if(.false.) )  
-   !itsdone = itsdone + 1
-   !endif
+
+   if(k==1) then
+
+   if(nsteps_run == 1) then 
+
+   do kk=1,km
+   call hdifft(kk, WORKN_HOST(:,:,:,kk), TMIX, UMIX, VMIX, this_block)
+   enddo
+
+
+   endif
+   
+   if(itsdone == 0) then   
+   !dir$ offload_transfer target(mic:micno)  nocopy( SLX,SLY,SF_SUBM_X,SF_SUBM_Y,SF_SLX,SF_SLY,TX,TY,TZ,WTOP_ISOP,WBOT_ISOP  : alloc_if(.true.) free_if(.false.)) &
+   !dir$ nocopy( UIT,VIT,HYXW,HXYS,RZ_SAVE,SLA_SAVE,WORKN_PHI :alloc_if(.true.) free_if(.false.) ) &
+   !dir$ in( KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,HXY,HYX,RX,RY,RB,RBR,KMT,KMTE,KMTN,BUOY_FREQ_SQ : alloc_if(.true.) free_if(.false.)) &
+   !dir$ in( SIGMA_TOPO_MASK,DYT,DXT,HUS,HUW,HTN,HTE,TAREA_R,TIME_SCALE,FCORT : alloc_if(.true.) free_if(.false.) ) in(TLT)
+   itsdone = itsdone + 1
+   endif
+
+   start_time = omp_get_wtime() 
  
-   !dir$ offload begin target(mic:micno)in(kk,TMIX,UMIX,VMIX,this_block,hmix_tracer_itype,tavg_HDIFE_TRACER,tavg_HDIFN_TRACER,tavg_HDIFB_TRACER) &
-   !dir$ in(lsubmesoscale_mixing,dt,dtu,HYX,HXY,RZ_SAVE,RX,RY,TX,TY,TZ,KMT,KMTE,KMTN,implicit_vertical_mix,vmix_itype,KPP_HBLT,HMXL) &
-   !dir$ in(HYXW,HXYS,UIT,VIT,RB,RBR,BL_DEPTH) &
-   !dir$ in(kappa_isop_type,kappa_thic_type, kappa_freq,slope_control,SLA_SAVE,nsteps_total, ah,ah_bolus, ah_bkg_bottom,ah_bkg_srfbl) &
-   !dir$ in(slm_r,slm_b,compute_kappa,BUOY_FREQ_SQ,SIGMA_TOPO_MASK,dz,dzw,dzwr,zw,dzr,DYT,DXT,HUW,HUS,TAREA_R,HTN,HTE,pi,zt) &
-   !dir$ in(luse_const_horiz_len_scale,hor_length_scale,TIME_SCALE,efficiency_factor,TLT,my_task,master_task) & 
-   !dir$ in(max_hor_grid_scale,mix_pass,grav,zgrid,DZT,partial_bottom_cells,FCORT,linertial,ldiag_cfl,radian,TLAT,eod_last) &
+   !dir$ offload begin target(mic:micno)in(kk,TCUR,UCUR,VCUR,this_block,hmix_tracer_itype,tavg_HDIFE_TRACER,tavg_HDIFN_TRACER,tavg_HDIFB_TRACER) &
+   !dir$ in(lsubmesoscale_mixing,dt,dtu,implicit_vertical_mix,vmix_itype,KPP_HBLT,HMXL) &
+   !dir$ in(BL_DEPTH,kappa_isop_type,kappa_thic_type, kappa_freq,slope_control,nsteps_total, ah,ah_bolus, ah_bkg_bottom,ah_bkg_srfbl) &
+   !dir$ in(slm_r,slm_b,compute_kappa,dz,dzw,dzwr,zw,dzr,pi,zt) &
+   !dir$ in(luse_const_horiz_len_scale,hor_length_scale,efficiency_factor,my_task,master_task) & 
+   !dir$ in(max_hor_grid_scale,mix_pass,grav,zgrid,DZT,partial_bottom_cells,linertial,ldiag_cfl,radian,TLAT,eod_last) &
    !dir$ in(ltavg_on,num_avail_tavg_fields,sigo,state_coeffs,to,so,use_const_ah_bkg_srfbl,transition_layer_on,tavg_HDIFS,tavg_HDIFT) &
-   !dir$ out(WORKN_PHI) inout(VDC,VDC_GM) &
-   !dir$ in(SLX,SLY,SF_SUBM_X,SF_SUBM_Y,KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,SF_SLX,SF_SLY,WTOP_ISOP) &
-   !dir$ in( WBOT_ISOP)
+   !dir$ nocopy(SLX,SLY,SF_SUBM_X,SF_SUBM_Y,KAPPA_ISOP,KAPPA_THIC,HOR_DIFF,KAPPA_VERTICAL,KAPPA_LATERAL,SF_SLX,SF_SLY : alloc_if(.false.) free_if(.false.) ) &
+   !dir$ nocopy(HYX,HXY,RX,RY,TX,TY,TZ,WTOP_ISOP,WBOT_ISOP,RB,RBR,KMT,KMTE,KMTN,SIGMA_TOPO_MASK,UIT,VIT : alloc_if(.false.) free_if(.false.) ) & 
+   !dir$ nocopy(DYT,DXT,HYXW,HXYS,HUS,HUW,HTN,HTE,TAREA_R,RZ_SAVE,SLA_SAVE,TIME_SCALE,FCORT:alloc_if(.false.) free_if(.false.) ) & 
+   !dir$ nocopy(TLT) inout(VDC,VDC_GM)out(WORKN_PHI:alloc_if(.false.) free_if(.false.)) signal(off_sig)
 
    do kk=1,km
    call hdifft(kk, WORKN_PHI(:,:,:,kk), TCUR, UCUR, VCUR, this_block)
@@ -1812,25 +1809,22 @@
 
    !dir$ end offload
 
+   end_time = omp_get_wtime()
+
+   print *,"time at offload region is",end_time - start_time,my_task
+
    endif
 
-   if(nsteps_run == 1)then 
-        if(k==1)then
+   !elseif( k == 1) then 
 
-                do kk=1,km
-                call hdifft(kk, WORKN_HOST(:,:,:,kk), TMIX, UMIX, VMIX, this_block)
-                !VDC_GM_HOST = VDC_GM
-                !VDC_HOST = VDC
-                enddo
+   !do kk=1,km
+   !call hdifft(kk, WORKN_PHI(:,:,:,kk), TMIX, UMIX, VMIX, this_block)
+   !enddo
 
-        endif
-   endif 
-
-   if(nstep_run == 1) then
+   !endif
+ 
    WORKN = WORKN_HOST(:,:,:,k)
-   else
-   WORKN = WORKN_PHI(:,:,:,k)
-   endif
+   
 
    !if(my_task==master_task)then
 

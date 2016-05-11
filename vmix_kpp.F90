@@ -3094,7 +3094,8 @@
 
    integer (int_kind) :: &
       i, j,              &  ! horizontal loop indices
-      k                     ! vertical level index
+      k, max_thrds,      &  ! vertical level index
+      thrds          
 
    real (r8), dimension(nx_block,ny_block) ::  &
       WORK1, WORK2
@@ -3186,8 +3187,18 @@
    enddo
 
 
+   if( omp_get_max_threads() == 240 ) then
+
+     thrds = 30
+
+   else
+
+     thrds = 1
+
+   endif
+
    do k=1,km
-     !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(ztmp,j,i)NUM_THREADS(60)
+     !$OMP PARALLEL DO DEFAULT(SHARED)PRIVATE(ztmp,j,i)NUM_THREADS(thrds)
      do j=2,ny_block-1
        do i=2,nx_block-1
 
